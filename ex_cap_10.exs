@@ -8,7 +8,7 @@ defmodule MyList  do
   end
 
   def flatten([h | t], acum) do
-
+      [h | flatten(t, acum)]
   end
 end
 
