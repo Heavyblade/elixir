@@ -1,15 +1,21 @@
 defmodule MyList  do
-  def flatten([], _acum) do
-      []
+
+  def flatten(list) do
+      _flatten(list, [])
   end
 
-  def flatten([h | t], acum) when is_list(h)  do
-
+  def _flatten([],acum) do
+      acum
   end
 
-  def flatten([h | t], acum) do
-      [h | flatten(t, acum)]
+  def _flatten([h | t], acum) when is_list(h)  do
+      _flatten(t, acum ++ h)
+  end
+
+  def _flatten([h | t], acum) do
+      _flatten(t, acum ++ [h])
   end
 end
 
-MyList.flatten([ 1, [ 2, 3, [4] ], 5, [[[6]]]])
+IO.puts inspect(MyList.flatten([ 1, [ 2, 3, [4] ], 5, [[[6]]]]))
+IO.puts inspect( MyList.flatten([1,2,3,[4,5],6]) )
