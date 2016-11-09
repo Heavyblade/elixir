@@ -17,5 +17,19 @@ defmodule MyList  do
   end
 end
 
-IO.puts inspect(MyList.flatten([ 1, [ 2, 3, [4] ], 5, [[[6]]]]))
-IO.puts inspect( MyList.flatten([1,2,3,[4,5],6]) )
+
+defmodule MyList2 do
+
+  def flatten([h | t]) when is_list(h) do
+      [ h | flatten(t) ]
+  end
+
+  def flatten([ h | t]) do
+      [ h |  ]
+  end
+end
+
+# IO.puts inspect(MyList.flatten([ 1, [ 2, 3, [4] ], 5, [[[6]]]]))
+# IO.puts inspect( MyList.flatten([1,2,3,[4,5, [6]],7]) )
+
+IO.puts inspect( MyList2.flatten( [1,[6]] ) )
