@@ -38,8 +38,40 @@ defmodule Issues.CLI do
       """
   end
 
-  def process({user, project, _count}) do
+  def process({user, project, count}) do
       Issues.GithubIssues.fetch(user, project)
+      |> decode_response
+      |> convert_to_list_of_maps
+      |> sort_into_ascending_order
+      |> Enum.take(count)
+      |> print_table
+  end
+
+  def convert_to_list_of_maps(list) do
+      list
+      |> Enum.map(&Enum.into(&1, Map.new))
+  end
+
+  def sort_into_ascending_order(list) do
+      Enum.sort list, fn(i1,i2) -> i1["created_at"] <= i2["created_at"]  end
+  end
+
+  def decode_response({:ok, body}), do: body
+
+  def decode_response({:error, error}) do
+      { _, message } = List.keyfind(error, "message", 0)
+      IO.puts "Error fetching from Github: #{message}"
+      System.halt(2)
+  end
+
+  def print_table(list) do
+      max_id_element      = Enum.max_by( list, fn(x) -> x |> Map.fetch!("id") |> Integer.to_string(10) |> String.length end ) |> Map.fetch!("id") |> Integer.to_string(10) |> String.length
+      max_created_element = Enum.max_by( list, fn(x) -> x |> Map.fetch!("created_at") |> String.length end ) |> Map.fetch!("created_at") |> String.length
+      max_title_element   = Enum.max_by( list, fn(x) -> x |> Map.fetch!("title") |> String.length end ) |> Map.fetch!("title") |> String.length
+
+      IO.puts max_id_element
+      IO.puts max_created_element
+      IO.puts max_title_element
   end
 
 end
