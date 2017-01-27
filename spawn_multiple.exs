@@ -12,7 +12,9 @@ defmodule Chain do
                 fn (_,send_to) ->
                     spawn(Chain, :counter, [send_to])
                 end
+
       send last, 0 # start the count by sending a zero to the last process
+
       receive do # and wait for the result to come back to us
           final_answer when is_integer(final_answer) ->
             "Result is #{inspect(final_answer)}"
