@@ -65,7 +65,7 @@ defmodule CodePoster do
     end
 
     def merge_pixel_into_row(fill, character, _, _, [{:text, element = %{fill: fill}, text} | tail]) do
-      [{:text, element, text <> character} | tail]
+      [{:text, element, (text || "") <> (character || "") } | tail]
     end
 
     def merge_pixel_into_row(fill, character, x, y, pixels) do
