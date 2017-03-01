@@ -1,0 +1,1044 @@
+# Encoding: utf-8
+
+module V1
+# Users api
+class Users < Grape::API
+  include V1::Defaults
+  include Grape::Kaminari
+
+  guard_all!
+
+  helpers do
+    include HtmlSanitize
+
+    # Set the institution and ensure current user has access
+    def set_institution(u, params)
+      unless params[:institution_id].nil?
+        institution_id = params[:institution_id].to_i
+        institution = Institution.find(institution_id)
+        current_user.authorized!(Right::READ, institution)
+        u.institution_id = institution_id
+      end
+      u
+    end
+
+    def set_webex(u, params)
+      if params[:webex_credential_attributes].present?
+        u.webex_credential_attributes = params[:webex_credential_attributes]
+      end
+    end
+
+    # If new role assignments are specified, be sure the current user is allowed to create them
+    def verify_roles!(u, params)
+      unless params[:assignments].nil?
+        params[:assignments].each do |el|
+          assignment = Assignment.new(user: u, role: Role.find(el[:role_id]))
+          current_user.authorized!(Right::CREATE, assignment)
+        end
+      end
+      u
+    end
+
+    def build_stats_for_cohorts(query)
+        cohort_ids      = query.map(&:cohort_id).uniq
+        curriculumn_ids = query.collect { |x| x.cohort.curriculum_id }.uniq
+
+        {cohort_stats:       CohortUser.select("cohort_id, active, count(*) as total").group(:cohort_id, :active).where(cohort_id: cohort_ids , role: "Student"),
+         lo_stats:           Curriculum.number_learning_objectives_per_cohort(curriculumn_ids).to_a.inject({}) { |x, h| x[h.id] = h.total_los.to_i; x },
+         la_stats:           Curriculum.number_learning_activities_per_cohort(curriculumn_ids).to_a.inject({}) { |x, h| x[h.id] = h.total_los.to_i; x },
+         mastered_lo_stats:  Cohort.average_objectives_mastered_by_student_in_cohorts(cohort_ids),
+         cohort_active_usrs: Cohort.active_users_for_cohorts(cohort_ids)
+        }
+    end
+
+    def create_comment_from_params(params, new_feedback = true)
+        ua             = UserActivity.find_by!(student_id: params[:id], learning_activity_id: params[:learning_activity_id])
+        comment_origin = UserActivityAttempt.find_or_create_by_with_retry!(attempt_number: params[:attempt_number], user_activity_id: ua.id)
+        text_sanitized = sanitize_string(params[:score_comment])
+        arguments = {body:                     text_sanitized,
+                     student_id:               ua.student_id,
+                     cohort_id:                params[:cohort_id],
+                     author:                   current_user,
+                     user_activity_attempt_id: comment_origin.id }
+
+        if params[:score_id].present?
+            score          = ActivityScore.joins(user_activity_attempt: :user_activity).find(params[:score_id])
+            comment_origin = score
+        end
+
+        representer    = comment_origin.is_a?(ActivityScore) ? ActivityScoreRepresenter : AttemptRepresenter
+        score_comments = comment_origin.activity_score_comments
+
+        if params[:score_comment].blank? && params[:feedback_id].present?
+            score_comments.find(params[:feedback_id]).delete
+        else
+            new_feedback ? score_comments.create!(arguments) : score_comments.find(params[:feedback_id]).update!(arguments)
+        end
+
+        representer.new(comment_origin)
+    end
+
+    def get_list_of_activities(params)
+        user            = current_user_or_find(params[:id])
+        cohort          = user.cohorts.find(params[:cohort_id])
+        params[:q]      ||= {}
+        cohort_ordering = {'order_cohort ASC' => :ascending, 'order_cohort DESC' => :descending }[params[:q].delete(:s)] if params[:q][:s] =~ /order_cohort/i
+        filter_weight   = (params[:q][:weight] || "") =~ /(==|>|>=)/
+        to_select       = ["user_activities.*", "pending_attempts"]
+
+        if filter_weight
+           los_ids   = cohort.curriculum_objectives_ids
+           to_select << "with_weight.weight"
+        end
+
+        query = UserActivity.for_user_and_cohort(user.id, cohort.id)
+                            .search(params[:q])
+                            .result
+                            .select(to_select.join ", ")
+                            .with_grade_pending_attempts
+        query = query.with_weight(los_ids).where("with_weight.weight #{params[:q][:weight].gsub("==", "=")} 0") if filter_weight && los_ids.present?
+        query = query.order_in_cohort(cohort.id)
+        query = query.reverse if cohort_ordering == :descending
+        # Needed to put at the top posible activities already mastered but with attempts pending for grading
+        query = query.to_a.reverse.sort { |act| act.pending_attempts > 0 ? -1 : 1 } if params[:q][:s] =~ /status_priority/i
+        return query, cohort, user
+    end
+
+    def decorate_activities_for_cards(uas)
+        la_ids   = uas.map(&:learning_activity_id)
+        launch   = LearningActivity.filter_launchable_activities(la_ids, current_user)
+        attempts = UserActivityAttempt.where(user_activity_id: uas.map(&:id), state: UserActivityAttempt::VALID_ATTEMPTS_STATES)
+                                       .group(:user_activity_id)
+                                       .count
+        read_las = current_user.has_rights?(Right::READ, "learning_activities")
+
+        uas.map do |ua|
+          ActivitySimpleRepresenter.new(ua.learning_activity)
+                                   .to_hash( user_activity: ua,
+                                             attempt_count: attempts[ua.id] || 0,
+                                           allowed_actions: [("READ" if read_las ), ("LAUNCH_AS_STUDENT" if launch.include?(ua.learning_activity_id) )])
+        end.compact
+    end
+  end
+
+  resource :users do
+
+    paginate per_page: 100, max_per_page: 1000
+    desc "return a list of users"
+    get do
+      current_user.authorized!(Right::READ, User)
+      role_ids = params[:q].delete(:role_id) unless params[:q].nil?
+      institution_id = params[:q].delete(:institution_id) unless params[:q].nil?
+      users = User.search(params[:q]).result
+      users = users.with_roles(role_ids) unless role_ids.nil?
+      users = users.with_institution(institution_id) unless institution_id.nil?
+      paginate(users).map do |u|
+        UserListRepresenter.new u
+      end
+    end
+
+    desc 'Create a user', notes: 'For Admins'
+    params do
+      requires :first_name, type: String, desc: 'User first name'
+      optional :middle_name, type: String, desc: 'User middle name'
+      requires :last_name, type: String, desc: 'User last name'
+      optional :preferred_name, type: String, desc: 'User preferred name or nickname'
+      optional :username, type: String, desc: 'Username. If one is not provided, one will be generated.'
+      requires :email, type: String, desc: 'User email'
+      optional :phone, type: String, desc: 'User phone number'
+      optional :address1, type: String, desc: 'Address 1'
+      optional :address2, type: String, desc: 'Address 2'
+      optional :city, type: String, desc: 'City'
+      optional :state_province, type: String, desc: 'State or province'
+      optional :zip_postal_code, type: String, desc: 'ZIP or Postal Code'
+      optional :time_zone, type: String, desc: 'Time Zone identifier'
+      optional :institution_id, type: Integer, desc: 'Institution ID. If not provided, set to current user_id'
+      optional :language_preference, type: String, desc: 'Languange preference. Defaults to EN.'
+      requires :assignments, type: Array do
+        requires :role_id, type: Integer, desc: 'The ID of the role'
+      end
+    end
+    post do
+      u = User.new
+      current_user.authorized!(Right::CREATE, u)
+
+      # TODO: Remove once eula has been created
+      u.eula_accepted = true
+      # TODO: End remove
+
+      # Must set the username and institution directly
+      u.username = params[:username]
+      set_institution(u, params)
+
+      # Default the institution if not set
+      u.institution_id ||= current_user.institution_id
+
+      # Verify role assignments. This will throw an error if bad
+      verify_roles!(u, params)
+
+      save! UserAdminRepresenter.new(u), request.body.string
+    end
+
+    resource :stats do
+      desc "Ansychronously update all the user stats"
+      patch do
+        current_user.authorized!(Right::UPDATE, User)
+        UserStat.update_all_user_stats_async(true)
+      end
+    end
+
+    params do
+      requires :id, type: Integer, desc: 'User ID'
+    end
+    route_param :id, requirements: { id: /[0-9]*/ } do
+
+      desc 'Find a user by ID',
+           nickname: 'getUserById',
+           notes: 'Really cool REST API for Users',
+           http_codes: {
+             400 => 'Invalid ID supplied',
+             404 => 'User Instance not found'
+           }
+
+      params do
+        requires :password, type: String, desc: "new password for the just cloned user"
+      end
+      post :clone_user do
+        user = User.find(params[:id])
+        current_user.authorized!(Right::MANAGE_DEMO_INSTITUTION, user.institution)
+        new_user = user.clone_user(params)
+        UserAdminRepresenter.new(new_user)
+      end
+
+      get do
+        u = User.find(params[:id])
+        current_user.authorized!(Right::READ, u)
+
+        UserAdminRepresenter.new u
+      end
+
+      resource :stats do
+
+        desc "Retrieve all the cached stats for the user"
+        get do
+          u = User.find(params[:id])
+          current_user.authorized!(Right::READ, u)
+          u.user_stats.map { |stat| UserStatRepresenter.new(stat) }
+        end
+
+        desc "Update all the cached stats for the user"
+        patch do
+          u = User.find(params[:id])
+          current_user.authorized!(Right::UPDATE, u)
+          UserStat.update_stats(u)
+          u.user_stats.map { |stat| UserStatRepresenter.new(stat) }
+        end
+
+      end
+
+      desc "List current/expired/futures cohort of the user"
+      paginate :per_page => 100, :max_per_page => 10000
+      resource :cohorts do
+        params do
+          requires :user_role, type: String, desc: "the role for the users to list the grouped cohorts"
+          optional :avoid_expired_extension, type: Boolean, desc: "Avoid validation of number of days to display cohorts", default: false
+        end
+        get :grouped do
+          u = User.find(params[:id])
+          current_user.authorized!(Right::READ, u)
+          Cohort.grouped(u, params)
+        end
+      end
+
+      desc 'Update a user'
+      params do
+        optional :first_name, type: String
+        optional :last_name, type: String
+        optional :email, type: String
+        optional :preferred_name, type: String, desc: 'User preferred name or nickname'
+        optional :email, type: String, desc: 'User email'
+        optional :phone, type: String, desc: 'User phone number'
+        optional :address1, type: String, desc: 'Address 1'
+        optional :address2, type: String, desc: 'Address 2'
+        optional :city, type: String, desc: 'City'
+        optional :state_province, type: String, desc: 'State or province'
+        optional :zip_postal_code, type: String, desc: 'ZIP or Postal Code'
+        optional :time_zone, type: String, desc: 'Time Zone identifier'
+        optional :language_preference, type: String, desc: 'Languange preference. Defaults to EN.'
+        optional :assignments, type: Array do
+          requires :role_id, type: Integer, desc: 'The ID of the role'
+        end
+        optional :webex_credential_attributes, type: Hash do
+          optional :id,             type: Integer
+          optional :username, type: String, desc: 'Webex username'
+          optional :password, type: String, desc: 'Webex password'
+          optional :default_meeting_password, type: String, desc: 'Meeting password'
+        end
+      end
+      patch do
+        u = User.find(params[:id])
+        current_user.authorized!(Right::UPDATE, u)
+
+        # NOTE: username and institution_id are not changeable!
+
+        # Verify role assignments. This will throw an error if bad
+        verify_roles!(u, params)
+        set_webex(u, params)
+
+        save! UserAdminRepresenter.new(u), request.body.string
+      end
+
+      if !Rails.env.production?
+        desc "Reset a user's password"
+        resource :reset do
+          patch do
+            user = User.find(params[:id])
+            error!({message:'The specified user is not active'}, 422) unless user.active?
+            current_user.authorized!(Right::RESET_PASSWORD, user)
+            pwd = ENV['PASSWORD'] || 'Y0da2104'
+            user.update_attributes!(password: pwd, password_confirmation: pwd)
+            UserAdminRepresenter.new(user)
+          end
+        end
+      end
+
+      desc 'Curriculums user has access to',
+           notes: 'returns active curriculums where user is actively enrolled as a student'
+      resource :curriculums do
+        params do
+          optional :role, type: String, values: -> { CohortUser::COHORT_ROLES.values }, desc: 'Filter curriculums by role'
+        end
+        paginate per_page: 10, max_per_page: 1000
+        get do
+          user = User.find(params[:id])
+          current_user.authorized!(Right::READ, user)
+          current_user.authorized!(Right::READ, Curriculum)
+
+          # TODO: This is in need of some work with scopes for security
+          join_params = { user_id: user.id, active: true }
+          join_params[:role] = params[:role] if params[:role]
+          query = Curriculum.is_published.select("#{Curriculum.table_name}.*, #{Cohort.table_name}.starts_on, #{Cohort.table_name}.ends_on")
+                            .joins(cohorts: :cohort_users)
+                            .where("#{Cohort.table_name}.starts_on <= ?", Date.current)
+                            .where(cohort_users: join_params)
+                            .order("#{Cohort.table_name}.ends_on DESC")
+                            .distinct
+          paginate(query).map do |cur|
+            CurriculumRepresenter.new cur
+          end
+        end
+      end
+
+      desc 'Activate a deactivated user User', notes: 'Activate a deactivated User so that they are able to sign in or launch TCM via LTI.'
+      resource :activate do
+        patch do
+          user = User.inactive.find(params[:id])
+          current_user.authorized!(Right::UPDATE, user)
+          current_user.authorized!(Right::MANAGE_ACTIVATION, user)
+          user.activate!
+          UserAdminRepresenter.new user
+        end
+      end
+
+      desc 'Dectivate an active User', notes: 'Dectivate an active User so that they are no longer able to sign in or launch TCM via LTI.'
+      resource :deactivate do
+        patch do
+          user = User.active.find(params[:id])
+          current_user.authorized!(Right::UPDATE, user)
+          current_user.authorized!(Right::MANAGE_ACTIVATION, user)
+          user.deactivate!
+          UserAdminRepresenter.new user
+        end
+      end
+
+      desc 'Programs user has enrolled into', notes: 'returns programs where user is enrolled'
+      resource :programs do
+        paginate per_page: 10, max_per_page: 1000
+
+        params do
+          optional :all_visible, type: Boolean
+        end
+        get do
+          user = current_user_or_find(params[:id])
+          user.authorized!(Right::READ, Program)
+
+          query = user.programs.is_published.latests_enrollments
+          query = query.visible unless params[:all_visible]
+          paginate(query).map do |cur|
+            ProgramRepresenter.new(cur).to_hash(user_id: params[:id])
+          end
+        end
+
+        params do
+          requires :program_id, type: Integer, desc: 'Program ID'
+        end
+        route_param :program_id, requirements: { id: /[0-9]*/ } do
+          desc 'Enrolls a user in a program'
+          params do
+            optional :enrollment_date, type: Date, desc: 'Effective date of enrollment.  If omitted, current date is used.'
+          end
+          put do
+            user = current_user_or_find(params[:id])
+            current_user.authorized!(Right::MANAGE_PROGRAM_ENROLLMENT, user)
+            status Program.find(params[:program_id]).enroll_user(user, params)
+          end
+
+          desc 'Un-enrolls a user from a program'
+          delete do
+            user = current_user_or_find(params[:id])
+            current_user.authorized!(Right::MANAGE_PROGRAM_ENROLLMENT, user)
+
+            Program.find(params[:program_id]).unenroll_user(user)
+            status 204
+          end
+
+          resource :competencies do
+            desc 'Competencies mapped specified by the program, with student state'
+            paginate per_page: 25, max_per_page: 1000
+            get do
+              user = current_user_or_find(params[:id])
+              program = user.programs.find(params[:program_id])
+              current_user.authorized!(Right::READ, program)
+
+              paginate(UserCompetency.for_user_and_program(user.id, program.id).search(params[:q]).result).map do |next_competency|
+                CompetencyRepresenter.new(next_competency.competency).to_hash(user_competency: next_competency) if current_user.authorized?(Right::READ, next_competency)
+              end.compact
+            end
+
+            resource :tagged do
+              desc 'Competencies mapped specified by the program, with student state grouped by tag'
+              paginate per_page: 25, max_per_page: 1000
+              get do
+                user = current_user_or_find(params[:id])
+                program = user.programs.find(params[:program_id])
+                current_user.authorized!(Right::READ, program)
+
+                user_competencies = UserCompetency.for_user_and_program(user.id, program.id).search(params[:q]).result
+                api_paginate(UserCompetency.grouped_by_tag(user_competencies).to_a).map do |tag|
+                  {
+                    :title => tag.first,
+                    :competencies => tag.last.reduce([]) { |result, uc|
+                      result << CompetencyRepresenter.new(uc.competency).to_hash(:user_competency => uc) if current_user.authorized?(Right::READ, uc)
+                    }
+                  }
+                end.compact
+              end
+            end
+          end
+        end
+      end
+
+      desc 'Cohorts for User'
+      resource :cohorts do
+        desc 'Cohorts the user has been enrolled in'
+        params do
+          optional :role, type: String, values: -> { CohortUser::COHORT_ROLES.values }, desc: 'Filter curriculums by role'
+          optional :json_type, type: String
+          optional :q, type: Hash, default: {}, desc: "Optional query params"
+        end
+        paginate per_page: 10, max_per_page: 1000
+        get do
+          current_user.authorized!(Right::READ, Cohort)
+          params[:q][:s] ||= "started_on desc"
+
+          user               = current_user_or_find(params[:id])
+          conditions         = { user_id: user.id, active: true }
+          params[:role]      = CohortUser::COHORT_ROLES[:student] if params[:json_type] == "with_stats"
+          conditions[:role]  = params[:role] if params[:role]
+          cohort_users       = CohortUser.includes(cohort: :curriculum).where(conditions).order("#{Cohort.table_name}.ends_on DESC")
+          stats              = build_stats_for_cohorts(cohort_users) unless params[:json_type] == "with_stats"
+
+          paginate(cohort_users.search(params[:q]).result).map do |cu|
+              if params[:json_type] == "with_stats"
+                  StudentCohortProgressRepresenter.new cu
+              else
+                  CohortRepresenter.new(cu.cohort).to_hash({cohort_user: cu}.merge(stats))
+              end
+          end
+        end
+
+        params do
+          requires :cohort_id, type: Integer, desc: 'Cohort ID'
+          optional :role,      type: String,  desc: "Role of the user to get the enrollments as that specific role"
+        end
+        route_param :cohort_id, requirements: { id: /[0-9]*/ } do
+          get do
+            resp = CohortUser.get_cohort_prev_next_for_user({
+              role: params[:role],
+              user_id: params[:id],
+              cohort_id: params[:cohort_id]
+            })
+            return status 404 unless resp
+            resp
+          end
+
+          desc 'update the user\'s cohort enrollment'
+          params do
+            requires :started_on, type: Date, desc: 'Cohort enrollment date, in iso8601 format (YYYY-MM-DD)'
+            optional :ends_on,    type: Date, desc: 'Cohort enrollment end date, in iso8601 format (YYYY-MM-DD)'
+          end
+          patch do
+            user = current_user_or_find(params[:id])
+            cohort_user = CohortUser.find_by(cohort_id: params[:cohort_id], user_id: params[:id])
+            current_user.authorized!(Right::UPDATE, cohort_user)
+
+            cohort_user.started_on = params[:started_on]
+            cohort_user.ends_on = params[:ends_on] if params[:ends_on].present?
+            cohort_user.save!
+            save! CohortUserRepresenter.new(cohort_user), request.body.string
+          end
+
+          resource :competencies do
+            desc 'Competencies mapped by objectives specified by the curriculum matching the cohort, with student state'
+            paginate per_page: 25, max_per_page: 1000
+            get do
+              user = current_user_or_find(params[:id])
+              cohort = user.cohorts.find(params[:cohort_id])
+              current_user.authorized!(Right::READ, cohort)
+
+              current_user.authorized!(Right::READ, Competency)
+
+              paginate(UserCompetency.for_user_and_cohort(user.id, cohort.id)).map do |next_competency|
+                CompetencyRepresenter.new(next_competency.competency).to_hash(user_competency: next_competency) if current_user.authorized?(Right::READ, next_competency)
+              end.compact
+            end
+
+            params do
+              requires :competency_id, type: Integer
+            end
+            route_param :competency_id, requirements: { id: /[0-9]*/ } do
+              desc 'Objectives specified by the curriculum matching the cohort and competency, with student state'
+              resource :objectives do
+                desc 'Objectives specified by the curriculum matching the cohort, with student state'
+                paginate per_page: 25, max_per_page: 1000
+                get do
+                  user = current_user_or_find(params[:id])
+                  cohort = user.cohorts.find(params[:cohort_id])
+                  current_user.authorized!(Right::READ, cohort)
+
+                  competency = user.competencies.find(params[:competency_id])
+                  current_user.authorized!(Right::READ, competency)
+
+                  current_user.authorized!(Right::READ, LearningObjective)
+
+                  paginate(UserObjective.for_user_and_cohort_and_competency(user.id, cohort.id, competency.id)).map do |next_objective|
+                    ObjectiveRepresenter.new(next_objective.learning_objective).to_hash(user_objective: next_objective) if current_user.authorized?(Right::READ, next_objective)
+                  end.compact
+                end
+              end
+
+              resource :activities do
+                desc 'Activities specified by the curriculum matching the cohort and competency, with student state'
+                paginate per_page: 25, max_per_page: 1000
+                get do
+                  user = current_user_or_find(params[:id])
+                  cohort = user.cohorts.find(params[:cohort_id])
+                  current_user.authorized!(Right::READ, cohort)
+
+                  competency = user.competencies.find(params[:competency_id])
+                  current_user.authorized!(Right::READ, competency)
+
+                  current_user.authorized!(Right::READ, LearningActivity)
+                  paginate(UserActivity.for_user_and_cohort_and_competency(user.id, cohort.id, competency.id)).order_in_cohort(cohort.id).map do |next_activity|
+                    ActivityRepresenter.new(next_activity.learning_activity).to_hash(user_activity: next_activity) if current_user.authorized?(Right::READ, next_activity)
+                  end.compact
+                end
+
+                params do
+                  requires :user_activity_id, type: Integer, desc: 'User Activity ID'
+                end
+                route_param :user_activity_id do
+
+                  desc 'Retrieve student activity', {
+                    notes: 'Also returns the prev and next student activities, if existing'
+                  }
+                  get do
+                    user = current_user_or_find(params[:id])
+                    cohort = user.cohorts.find(params[:cohort_id])
+                    current_user.authorized!(Right::READ, cohort)
+
+                    competency = user.competencies.find(params[:competency_id])
+                    current_user.authorized!(Right::READ, competency)
+
+                    current_user.authorized!(Right::READ, LearningActivity)
+
+                    query = paginate(UserActivity.for_user_and_cohort_and_competency(user.id, cohort.id, competency.id))
+                    results = query.all
+                    index = results.find_index { |ua| ua.id == params[:user_activity_id] }
+                    if !index
+                      status 404
+                    else
+                      prev_item = results.at(index - 1) unless index - 1 < 0
+                      next_item = results.at(index + 1)
+                      item = results.at(index)
+                      current_user.authorized!(Right::READ, item)
+                      ActivityRepresenter.new(item.learning_activity).to_hash(
+                        user_activity: item,
+                        prev_item:     prev_item,
+                        next_item:     next_item,
+                      )
+                    end
+                  end
+                end
+              end
+            end
+          end
+
+          resource :objectives do
+            desc 'Objectives specified by the curriculum matching the cohort, with student state'
+            paginate per_page: 25, max_per_page: 1000
+            get do
+              user = current_user_or_find(params[:id])
+              cohort = user.cohorts.find(params[:cohort_id])
+              current_user.authorized!(Right::READ, cohort)
+
+              current_user.authorized!(Right::READ, LearningObjective)
+              paginate(LearningPlanContext.joins(:cohort)
+                .joins(user_objective: :learning_objective)
+                .where(cohorts: {id: cohort.id}, user_objectives: {student_id: user.id})
+                .search(params[:q]).result).map do |lpc|
+                ObjectiveRepresenter.new(lpc.user_objective.learning_objective).to_hash(learning_plan_context: lpc, user_objective: lpc.user_objective)
+              end.compact
+            end
+          end
+
+          resource :activities do
+            desc 'Activities specified by the curriculum matching the cohort, with student state'
+            paginate per_page: 25, max_per_page: 1000
+            get do
+                query, cohort, user = get_list_of_activities(params)
+
+                current_user.authorized!(Right::READ, cohort)
+                current_user.authorized!(Right::READ, UserActivity)
+
+                collection = decorate_activities_for_cards(query.to_a)
+                paginate(Kaminari.paginate_array(collection))
+            end
+
+            params do
+              requires :learning_activity_id, type: Integer, desc: 'Learning Activity ID'
+            end
+            route_param :learning_activity_id do
+              desc 'Single activity specified by the curriculum matching the cohort, with student state'
+              get do
+                query, cohort, user = get_list_of_activities(params)
+
+                current_user.authorized!(Right::READ, cohort)
+                current_user.authorized!(Right::READ, LearningActivity)
+
+                results = query.select { |ua| current_user.authorized?(Right::READ, ua) && !ua.learning_activity.read_only }.compact
+                index   = results.find_index { |ua| ua.learning_activity_id == params[:learning_activity_id] }
+
+                if !index
+                  status 404
+                else
+                  prev_item = results.at(index - 1) unless index - 1 < 0
+                  next_item = results.at(index + 1)
+                  item      = results.at(index)
+                  current_user.authorized!(Right::READ, item)
+                  attempts  = user.user_activities
+                                  .find_by!(:learning_activity_id => params[:learning_activity_id])
+                                  .try(:user_activity_attempts).try(:sorted_by_attempt) rescue []
+
+                  ActivityRepresenter.new(item.learning_activity).to_hash(
+                    user_activity: item,
+                    prev_item: prev_item ? prev_item.learning_activity : nil,
+                    next_item: next_item ? next_item.learning_activity : nil,
+                    attempts: attempts
+                  )
+                end
+              end
+            end
+          end
+        end
+
+      end
+
+      resource :authorized do
+        desc 'Given a subject type, id, and action, assert whether this user may do so',
+             notes: 'The subject type is the name of an API endpoint, for example activities.',
+             http_codes: {
+               200 => 'User has been granted permission',
+               404 => 'Permission grant could not be found'
+             }
+        params do
+          optional :subject_id, type: Integer
+          requires :subject_type, type: String
+          requires :action, type: String
+        end
+        get do
+          user = current_user_or_find(params[:id])
+          if authorized?(user, params[:action], params[:subject_type], params[:subject_id])
+            status 200
+          else
+            status 404
+          end
+        end
+      end
+
+      resource :activities do
+        desc 'Get a list of a user\'s activities, including their official score if it is available'
+        paginate :per_page => 100, :max_per_page => 1000
+        get do
+          user = current_user_or_find(params[:id])
+          current_user.authorized!(Right::READ, UserActivity)
+          paginate(UserActivity.where(student_id: user.id).search(params[:q]).result).map do |ua|
+            ActivityRepresenter.new(ua.learning_activity).to_hash(user_activity: ua) if current_user.authorized?(Right::READ, ua)
+          end.compact
+        end
+
+        params do
+          requires :learning_activity_id, type: Integer, desc: 'Learning Activity ID'
+        end
+        route_param :learning_activity_id, requirements: { id: /[0-9]*/ } do
+
+          desc 'Get a single activity including this user\'s score and state'
+          get do
+            user = current_user_or_find(params[:id])
+            ua = user.user_activities.find_by!(learning_activity_id: params[:learning_activity_id])
+            current_user.authorized!(Right::READ, ua)
+
+            ActivityRepresenter.new(ua.learning_activity).to_hash(user_activity: ua)
+          end
+
+          desc 'Update a user\'s activity state and timestamps'
+          params do
+            optional :attempt_number, type: Integer, default: 1
+            optional :user_state, type: String, desc: "The state of the user for this activity.  Valid values are 'work_submitted' and 'in_progress' or 'not_valid'"
+            optional :user_started_at, type: Time, desc: "When the student started work"
+            optional :user_completed_at, type: Time, desc: "When the student submitted work"
+            optional :invalid_reason, type: String, desc: "Reason to mark an attempt as invalid. Valid values are 'incomplete', 'disqualified', 'plagiarism', 'other'"
+            optional :invalid_comments, type: String, desc: "Comment if the attempt is invalid"
+          end
+          patch do
+            user_state = params[:user_state]
+            user_started_at = params[:user_started_at] || Time.current
+            user_completed_at = params[:user_completed_at] || Time.current
+
+            error!({message: 'invalid user_state'}, 422) unless %w(work_submitted in_progress not_valid).include? user_state
+
+            ua = UserActivity.find_by!(student_id: params[:id], learning_activity_id: params[:learning_activity_id])
+            attempt = UserActivityAttempt.find_or_create_by_with_retry!(user_activity_id: ua.id, attempt_number: params[:attempt_number])
+
+            permission = Right::SCORE
+            permission = Right::SELF_SCORE if current_user == ua.student
+            current_user.authorized!(permission, ua)
+
+            case user_state
+            when "work_submitted"
+              attempt.submit_work! user_completed_at
+              ua.reload
+              ActivityRepresenter.new(ua.learning_activity).to_hash(user_activity: ua)
+            when "in_progress"
+              attempt.start_work! user_started_at
+              ua.reload
+              ActivityRepresenter.new(ua.learning_activity).to_hash(user_activity: ua)
+            when "not_valid"
+              attempt.mark_invalid!(params[:invalid_reason], params[:invalid_comments])
+              ua.reload
+              ActivityRepresenter.new(ua.learning_activity).to_hash(user_activity: ua, attempts: [attempt.reload])
+            end
+          end
+
+          desc "Comments managment"
+          params do
+            requires :attempt_number, type: Integer, desc: 'The attempt number of the one to add new feedback'
+            requires :cohort_id,      type: Integer, desc: 'Id of the current cohort for this attempt comment'
+            optional :score_id,       type: Integer, desc: 'Score id in case the comment will be connect to a score and no to an attempt'
+          end
+          resource :comments do
+            desc "create a feedback for an attemp"
+            params do
+                requires :score_comment,  type: String,  desc: 'when revise a score can add a comment sending this param'
+            end
+            post do
+              current_user.authorized!(Right::SCORE_FEEDBACK, UserActivity)
+              create_comment_from_params(params)
+            end
+
+            params do
+              requires :feedback_id, type: Integer, desc: "Id of the feedback to be updated/deleted"
+            end
+            route_param :feedback_id do
+                desc "Update comment for attempt or score"
+                params do
+                    requires :score_comment,  type: String,  desc: 'when revise a score can add a comment sending this param'
+                end
+                patch do
+                    current_user.authorized!(Right::SCORE_FEEDBACK, UserActivity)
+                    create_comment_from_params(params, false)
+                end
+
+                desc "Delete comment from attempt or score"
+                delete do
+                    current_user.authorized!(Right::SCORE_FEEDBACK, UserActivity)
+                    ua      = UserActivity.find_by!(student_id: params[:id], learning_activity_id: params[:learning_activity_id])
+                    comment = UserActivityAttempt.where(attempt_number: params[:attempt_number], user_activity_id: ua.id).first if ua.present?
+
+                    if params[:score_id].present?
+                        score   = ActivityScore.joins(user_activity_attempt: :user_activity).find(params[:score_id])
+                        comment = score
+                    end
+                    representer = comment.is_a?(ActivityScore) ? ActivityScoreRepresenter : AttemptRepresenter
+                    if comment.present?
+                       comment.activity_score_comments.find(params[:feedback_id]).destroy
+                       representer.new(comment)
+                    else
+                       status 404
+                    end
+                end
+            end
+          end
+
+          resource :effective_score do
+            desc 'get effective_score given a Learning activity and student'
+            get do
+              student = current_user_or_find(params[:id])
+              ua = student.user_activities.find_by!(learning_activity_id: params[:learning_activity_id])
+              current_user.authorized!(Right::READ, ua)
+
+              {effective_score: ua.score_f}
+            end
+          end
+
+          resource :scores do
+            desc 'get a list of scores that have been recorded for this activity'
+            get do
+              user = current_user_or_find(params[:id])
+              ua = user.user_activities.find_by!(learning_activity_id: params[:learning_activity_id])
+              current_user.authorized!(Right::READ, ua)
+
+              ua.activity_scores.map do |score|
+                ActivityScoreRepresenter.new(score)
+              end
+            end
+
+            desc 'Post a score for this activity'
+            params do
+              optional :attempt_number, type: Integer, default: 1
+              optional :curriculum_id, type: Integer
+              optional :cohort_id, type: Integer
+              optional :learning_objective_id, type: Integer
+              optional :scored_at, type: Time, default: Time.current, desc: 'Timestamp for when the score was calculated.  Defaults to the time when the API call is made.'
+              requires :score, type: Integer, desc: 'A student\'s score'
+              optional :maximum_score, type: Integer, desc: 'The maximum score for this activity.  If the activity is not gradable, maximum score should be 0.', default: "0"
+              optional :instructor_override, type: String, default: 'false', desc: 'Did an instructor over ride this score manually?'
+              optional :instructor_id, type: Integer, desc: 'The ID of the instructor that graded this activity'
+              optional :student_response, type: String, desc: 'A text-blob representing the student\'s response'
+              optional :activity_score_attributes, type: Array do
+                requires :key, type: String
+                requires :value, type: String
+              end
+            end
+            post do
+              user = current_user_or_find(params[:id])
+              ua = user.user_activities.find_by!(learning_activity_id: params[:learning_activity_id])
+              current_user.authorized!(Right::SCORE, ua)
+              User.find(params[:instructor_id]).authorized!(Right::SCORE, ua) if params[:instructor_id]
+              attempt = UserActivityAttempt.find_or_create_by_with_retry!(attempt_number: params[:attempt_number], user_activity_id: ua.id)
+              score = ActivityScore.new(user_activity_attempt_id: attempt.id, user_activity_id: ua.id)
+              # DE3868 update cohort user's timestamp to invalidate counter cache for all students tab.
+              #DE3891. Changing updating the User timestamp instead of CohortUser timestamp as
+              # cohort_id is not supplied when scores API is called fro CDP.
+              # Using the touch here directly instead of the state update call chain to avoid
+              # unncessarily invalidate cache from other state chage events.
+              user.touch
+              added_score = save! ActivityScoreRepresenter.new(score), request.body.string
+            end
+
+            params do
+              requires :score_id, type: Integer, desc: 'Unique score identifier'
+            end
+            route_param :score_id do
+              desc 'Edit a specific score'
+              params do
+                optional :curriculum_id, type: Integer
+                optional :cohort_id, type: Integer
+                optional :learning_objective_id, type: Integer
+                optional :scored_at, type: Time, default: Time.current, desc: 'Timestamp for when the score was calculated.  Defaults to the time when the API call is made.'
+                requires :score, type: Integer, desc: 'A student\'s score'
+                optional :maximum_score, type: Integer, desc: 'The maximum score for this activity.  If the activity is not gradable, maximum score should be 0.', default: "0"
+                optional :instructor_override, type: String, default: 'false', desc: 'Did an instructor over ride this score manually?'
+                optional :instructor_id, type: Integer, desc: 'The ID of the instructor that graded this activity'
+                optional :student_response, type: String, desc: 'A text-blob representing the student\'s response'
+                optional :activity_score_attributes, type: Array do
+                  requires :key, type: String
+                  requires :value, type: String
+                end
+              end
+              patch do
+                score = ActivityScore.joins(user_activity_attempt: :user_activity).find(params[:score_id])
+                student = score.user_activity_attempt.user_activity.student
+                User.find(params[:instructor_id]).authorized!(Right::SCORE, score.user_activity_attempt.user_activity) if params[:instructor_id]
+                current_user.authorized!(Right::SCORE, score.user_activity_attempt.user_activity)
+                # DE3868 update cohort user's timestamp to invalidate counter cache for all students tab.
+                #DE3891. Changing updating the User timestamp instead of CohortUser timestamp as
+                # cohort_id is not supplied when scores API is called fro CDP.
+                # Using the touch here directly instead of the state update call chain to avoid
+                # unncessarily invalidate cache from other state chage events.
+                student.touch
+                added_score = save! ActivityScoreRepresenter.new(score), request.body.string
+                added_score
+              end
+
+              desc 'Remove a score'
+              delete do
+                score = ActivityScore.include(:user_activity).find(params[:score_id])
+                current_user.authorized!(Right::SCORE, score.user_activity)
+
+                # TODO: Delete a score.  Probably just want to set this to inactive.
+
+                status 404
+              end
+            end
+          end
+        end
+      end
+
+      resource :objectives do
+        desc 'Get a list of objectives for this user'
+        paginate :per_page => 100, :max_per_page => 1000
+        get do
+          user = current_user_or_find(params[:id])
+          current_user.authorized!(Right::READ, LearningObjective)
+
+          paginate(user.user_objectives.search(params[:q]).result).map do |uo|
+            ObjectiveRepresenter.new(uo.learning_objective).to_hash(user_objective: uo) if current_user.authorized?(Right::READ, uo)
+          end.compact
+        end
+
+        params do
+          requires :learning_objective_id, type: Integer, desc: 'The ID for the LO for which you should get context'
+        end
+        route_param :learning_objective_id, requirements: { id: /[0-9]*/ } do
+          desc 'Get a specific LO, including this user\'s state'
+          get do
+            user = current_user_or_find(params[:id])
+            uo = user.user_objectives.find_by!(learning_objective_id: params[:learning_objective_id])
+            current_user.authorized!(Right::READ, uo)
+            ObjectiveRepresenter.new(uo.learning_objective).to_hash(user_objective: uo)
+          end
+
+          resource :activities do
+            desc 'Get a list of user\'s activities for this LO'
+            get do
+                student = current_user_or_find(params[:id])
+                uo      = student.user_objectives.find_by!(learning_objective_id: params[:learning_objective_id])
+
+                current_user.authorized!(Right::READ, uo)
+
+                uas     = student.activities_for_objective(params[:learning_objective_id])
+                                 .select("user_activities.*, pending_attempts")
+                                 .with_grade_pending_attempts
+                decorate_activities_for_cards(uas)
+            end
+
+            params do
+              requires :learning_activity_id, type: Integer, desc: 'Learning Activity ID'
+            end
+            route_param :learning_activity_id, requirements: { id: /[0-9]*/ } do
+              desc 'Single activity specified within the context of a user and a learning objective'
+              get do
+                student = current_user_or_find(params[:id])
+
+                uo = student.user_objectives.find_by!(learning_objective_id: params[:learning_objective_id])
+                current_user.authorized!(Right::READ, uo)
+                lo = uo.learning_objective
+
+                uas = student.activities_for_objective(lo.id)
+                uas = uas.where(learning_activities: {read_only: false})
+
+                index = uas.index { |ua| ua.learning_activity_id == params[:learning_activity_id] }
+
+                prev_ua = (index > 0) ? uas[index - 1] : nil
+                current_user.authorized!(Right::READ, prev_ua)
+
+                ua = uas[index]
+                current_user.authorized!(Right::READ, ua)
+
+                next_ua = (index < (uas.size - 1)) ? uas[index + 1] : nil
+                current_user.authorized!(Right::READ, next_ua)
+
+                ActivityRepresenter.new(ua.learning_activity).to_hash(
+                  prev_item: prev_ua.try(:learning_activity),
+                  next_item: next_ua.try(:learning_activity),
+                  user_activity: ua,
+                  attempts: ua.user_activity_attempts.try(:sorted_by_attempt)
+                )
+              end
+            end
+
+          end
+        end
+      end
+
+      resource :competencies do
+        desc 'Competencies in the users profile, along with their mastery state'
+        paginate :per_page => 100, :max_per_page => 1000
+        get do
+          user = current_user_or_find(params[:id])
+          current_user.authorized!(Right::READ, Competency)
+
+          paginate(user.user_competencies.search(params[:q]).result).map do |uc|
+            CompetencyRepresenter.new(uc.competency).to_hash(user_competency: uc) if current_user.authorized?(Right::READ, uc)
+          end.compact
+        end
+
+        params do
+          requires :competency_id, type: Integer, desc: 'The ID for the competency for which you should get context'
+        end
+        route_param :competency_id, requirements: { id: /[0-9]*/ } do
+          desc 'A users state for a specific competency'
+          get do
+            user = current_user_or_find(params[:id])
+            uc = user.user_competencies.find_by!(competency_id: params[:competency_id])
+            current_user.authorized!(Right::READ, uc)
+
+            CompetencyRepresenter.new(uc.competency).to_hash(user_competency: uc)
+          end
+
+          resource :objectives do
+            desc 'Get a list of objectives and the user state for this competency'
+            paginate :per_page => 100, :max_per_page => 1000
+            get do
+              user = current_user_or_find(params[:id])
+              uc = user.user_competencies.find_by!(competency_id: params[:competency_id])
+              current_user.authorized!(Right::READ, uc)
+
+              current_user.authorized!(Right::READ, UserObjective)
+
+              # TODO: This should be using user.user_competencies somewhere
+
+              query = UserObjective.with_competency(params[:competency_id]).with_student(params[:id])
+              query = query.order(params[:q][:s]) if params[:q] && !params[:q][:s].nil?
+              paginate(query).map do |uo|
+                ObjectiveRepresenter.new(uo.learning_objective).to_hash(user_objective: uo) if current_user.authorized?(Right::READ, uo)
+              end.compact
+            end
+          end
+
+          resource :activities do
+            desc 'Get a list of all activities associated with all LOs associated with this competency'
+            paginate :per_page => 100, :max_per_page => 1000
+            get do
+              user = current_user_or_find(params[:id])
+              uc = user.user_competencies.find_by!(competency_id: params[:competency_id])
+              current_user.authorized!(Right::READ, uc)
+
+              current_user.authorized!(Right::READ, UserActivity)
+
+              # TODO: This should be using user.user_competencies somewhere
+
+              query = UserActivity.joins(learning_activity: {learning_activity_learning_objectives: {learning_objective: {competency_objectives: :competency}}})
+                                  .where("competencies.id = ? AND user_activities.student_id = ?", params[:competency_id], params[:id])
+              paginate(query).map do |ua|
+                ActivityRepresenter.new(ua.learning_activity).to_hash(user_activity: ua) if current_user.authorized?(Right::READ, ua)
+              end.compact
+            end
+          end
+        end
+      end
+    end
+  end
+end
+end
