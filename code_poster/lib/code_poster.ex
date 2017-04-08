@@ -38,17 +38,23 @@ defmodule CodePoster do
     "a bb c d"
     """
     def join_code(code) do
-      Logger.debug("Joining code...")
-      code
-      |> String.trim
-      |> String.replace(~r/\s*\n+\s*/, " ")
-      |> String.replace(~r/\s/," ")
+        Logger.debug("Joining code...")
+        code
+        |> String.trim
+        |> String.replace(~r/\s*\n+\s*/, " ")
+        |> String.replace(~r/\s/," ")
+    end
+
+    def read_folder(path) do
+        File.ls!(path)
+        |> Enum.reject( fn x -> File.dir?(path <> "/" <> x) end)
+        |> Enum.map( fn x -> File.read!(path <> "/" <> x) end)
+        |> Enum.join
     end
 
     def load_code(data = %PosterData{code_path: code_path}) do
       Logger.debug("Loading code from '#{code_path}'...")
-      code = code_path
-      |> File.read!
+      code = read_folder(code_path)
       |> join_code
       |> String.codepoints
       %{data | code: code}
@@ -65,7 +71,7 @@ defmodule CodePoster do
     end
 
     def merge_pixel_into_row(fill, character, _, _, [{:text, element = %{fill: fill}, text} | tail]) do
-      [{:text, element, (text || "") <> (character || "") } | tail]
+      [{:text, element, (text) <> (character) } | tail]
     end
 
     def merge_pixel_into_row(fill, character, x, y, pixels) do
@@ -105,7 +111,7 @@ defmodule CodePoster do
              %{
                viewBox: "0 0 #{width*ratio} #{height}",
                xmlns: "http://www.w3.org/2000/svg",
-               style: "font-family: 'Source Code Pro'; font-size: 1; font-weight: 900;",
+               style: "font-family: 'Ubuntu'; font-size: 1; font-weight: 900;",
                width: final_width,
                height: final_height,
                "xml:space": "preserve"
@@ -138,6 +144,6 @@ defmodule CodePoster do
       |> save_svg
     end
 
-    def go, do: go(0.6, 3150, 4050, "./code", "./image.png", "out.svg")
+    def go, do: go(0.6, 3150, 4050, "/home/cvasquez/rails/ng2/app/models", "./velocity.png", "out.svg")
 
 end
