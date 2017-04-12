@@ -1,13 +1,30 @@
 defmodule Challenge do
 
-  @braces %{"(" => ")", "[" => "]", "{" => "}"}
+  @braces    %{"(" => ")", "[" => "]", "{" => "}"}
+  @openers   ["(", "{", "["]
 
-  def valid_braces(braces) do
-      [chr | tail] = String.codepoints(braces)
-      check(tail, @braces[chr])
+  def valid_braces(braces_string) do
+      length(check(String.codepoints(braces_string), [])) == 0
   end
 
-  def check([chr | tail], expected) do
-      check(tail, @braces[chr])
+  defp check([], to_close) do
+       to_close
+  end
+
+  defp check([ chr | tail], to_close) do
+       if Enum.member?(@openers, chr) do
+          check(tail, [ @braces[chr] | to_close ])
+       else
+           if chr == List.first(to_close) do
+              check(tail, tl(to_close))
+           else
+              check(tail, [chr | to_close])
+           end
+       end
   end
 end
+
+IO.puts Challenge.valid_braces( "(){}[]" )
+IO.puts Challenge.valid_braces( "(}" )
+IO.puts Challenge.valid_braces( "[(])" )
+IO.puts Challenge.valid_braces( "([{}])" )
