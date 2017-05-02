@@ -53,11 +53,11 @@ defmodule CodePoster do
     end
 
     def load_code(data = %PosterData{code_path: code_path}) do
-      Logger.debug("Loading code from '#{code_path}'...")
-      code = read_folder(code_path)
-      |> join_code
-      |> String.codepoints
-      %{data | code: code}
+        Logger.debug("Loading code from '#{code_path}'...")
+        code = read_folder(code_path)
+                |> join_code
+                |> String.codepoints
+        %{data | code: code}
     end
 
     def load_image(data = %PosterData{image_path: image_path}) do
