@@ -1,13 +1,11 @@
 defmodule NewCodePoster do
 
-  @doc """
-  iex> ElixirPoster.clean_code("if (true) {\\n    bang;\\n}")
-  "if (true) { bang; }"
-  iex> ElixirPoster.clean_code("{\\n    '    ';\\n}")
-  "{ '    '; }"
-  iex> ElixirPoster.clean_code("  a \\n bb\\n \\tc\\n    d  ")
-  "a bb c d"
-  """
+  def execute(code_path, image_path, ratio) do
+      code   loadcode(code_path)
+      image = d_image(image_path)
+      construct_text_elements(code, ratio, image)
+  end
+
   def clean_code(code) do
       Logger.debug("Joining code...")
 
@@ -35,12 +33,6 @@ defmodule NewCodePoster do
       Logger.debug("Loading image from '#{image_path}'...")
       {:ok, image} = Imagineer.load(image_path)
       image
-  end
-
-  def execute(code_path, image_path, ratio) do
-      code  = read_code(code_path)
-      image = load_image(image_path)
-      construct_text_elements(code, ratio, image)
   end
 
   def construct_text_elements(code, ratio, %{width: width, pixels: pixels}) do
