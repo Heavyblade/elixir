@@ -3,9 +3,9 @@ defmodule CodePoster do
     alias CodePoster.PosterData
 
     @doc """
-    iex> ElixirPoster.to_hex {50, 150, 250}
+    iex> CodePoster.to_hex {50, 150, 250}
     "#3296FA"
-    iex> ElixirPoster.to_hex {255, 0, 128}
+    iex> CodePoster.to_hex {255, 0, 128}
     "#FF0080"
     """
     def to_hex({r, g, b}) do
@@ -16,9 +16,9 @@ defmodule CodePoster do
     end
 
     @doc """
-    iex> ElixirPoster.to_hex {50, 150, 250}
+    iex> CodePoster.to_hex {50, 150, 250}
     "#3296FA"
-    iex> ElixirPoster.to_hex {255, 0, 128}
+    iex> CodePoster.to_hex {255, 0, 128}
     "#FF0080"
     """
     def to_hex({r, g, b, a}) do
@@ -30,11 +30,11 @@ defmodule CodePoster do
     end
 
     @doc """
-    iex> ElixirPoster.join_code("if (true) {\\n    bang;\\n}")
+    iex> CodePoster.join_code("if (true) {\\n    bang;\\n}")
     "if (true) { bang; }"
-    iex> ElixirPoster.join_code("{\\n    '    ';\\n}")
+    iex> CodePoster.join_code("{\\n    '    ';\\n}")
     "{ '    '; }"
-    iex> ElixirPoster.join_code("  a \\n bb\\n \\tc\\n    d  ")
+    iex> CodePoster.join_code("  a \\n bb\\n \\tc\\n    d  ")
     "a bb c d"
     """
     def join_code(code) do

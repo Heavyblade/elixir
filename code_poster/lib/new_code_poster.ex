@@ -1,10 +1,14 @@
 defmodule NewCodePoster do
   require Logger
 
-  def execute(code_path, image_path, ratio) do
+  @fontSize 20
+  @ratio 0.6
+
+  def execute(code_path \\ "/home/cvasquez/rails/ng2/app/models", image_path \\ "/home/cvasquez/Downloads/user.png") do
       code  = load_code(code_path)
       image = load_image(image_path)
-      construct_text_elements(code, ratio, image)
+      construct_text_elements(code, image)
+      |>
   end
 
   def clean_code(code) do
@@ -37,9 +41,9 @@ defmodule NewCodePoster do
   end
 
   @doc """
-  iex> ElixirPoster.to_hex {50, 150, 250}
+  iex> NewCodePoster.to_hex {50, 150, 250}
   "#3296FA"
-  iex> ElixirPoster.to_hex {255, 0, 128}
+  iex> NewCodePoster.to_hex {255, 0, 128}
   "#FF0080"
   """
   def to_hex({r, g, b}) do
@@ -50,9 +54,9 @@ defmodule NewCodePoster do
   end
 
   @doc """
-  iex> ElixirPoster.to_hex {50, 150, 250}
+  iex> NewCodePoster.to_hex {50, 150, 250}
   "#3296FA"
-  iex> ElixirPoster.to_hex {255, 0, 128}
+  iex> NewCodePoster.to_hex {255, 0, 128}
   "#FF0080"
   """
   def to_hex({r, g, b, a}) do
@@ -63,27 +67,34 @@ defmodule NewCodePoster do
       (a |> :binary.encode_unsigned |> Base.encode16)
   end
 
-  def pixed_mapper({r,g,b}, x, y) do
-      { :text, %{x: 100, y: 100, fill: "#{to_hex(r,g,b)}"}, chr }
+  @doc """
+  Mapping an rgb, a character and a position to a text tuple to be mapped to svg
+  iex> NewCodePoster.pixed_mapper({255, 0, 128}, "j", 1, 1)
+  {:text, %{x: 12.0, y: 20, fill: "#FF0080"}, "j"}
+  """
+  def pixed_mapper(rgb, chr, x, y) do
+      { :text, %{x: (x * @ratio * @fontSize), y: (@fontSize * y), fill: to_hex(rgb)}, chr }
   end
 
-  def row_mapper([], restCode, row_mapped, x, y), do: {row_mapped, restCode}
+  def row_mapper([], restCode, row_mapped, _, _) do
+      {Enum.reverse(row_mapped), restCode}
+  end
 
   def row_mapper([pixel | rest_row], [ chr | restCode ], row_mapped, x, y) do
-       pixel = pixed_mapper(pixel, chr, x, y)
-       row_mapper(rest_row, restCode, [ pixel | row_mapped ], y, x+1)
+      pixel = pixed_mapper(pixel, chr, x, y)
+      row_mapper(rest_row, restCode, [ pixel | row_mapped ], x+1, y)
   end
 
-  def image_mapper([], code, poster, line), do: poster
+  def image_mapper([], _, _, poster), do: poster
 
-  def image_mapper([row | rest], restCode, line, poster) do
-      {row, code} = row_mapper(row, restCode, [], 0, line)
-      image_mapper(rest, code, line + 1 , [ row | poster ] )
+  def image_mapper([row | rest], code, line, poster) do
+      {row, rest_code} = row_mapper(row, code, [], 0, line)
+      image_mapper(rest, rest_code, line + 1 , poster ++ [row])
   end
 
-  def construct_text_elements(code, ratio, %{pixels: pixels}) do
+  def construct_text_elements(code, %{pixels: pixels}) do
       Logger.debug("Constructing text elements...")
-      row_mapper(pixels, code, 0, [])
+      Logger.debug(inspect(image_mapper(pixels, code, 0, [])))
   end
 
 end

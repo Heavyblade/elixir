@@ -3,7 +3,7 @@ defmodule CodePosterTest do
   doctest CodePoster
 
   test "the truth" do
-    path = CodePoster.hello
+    path = "/hello"
     assert path == "/hello"
   end
 end

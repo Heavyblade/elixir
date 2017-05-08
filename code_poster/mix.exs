@@ -7,7 +7,11 @@ defmodule CodePoster.Mixfile do
      elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
-     deps: deps()]
+     deps: deps(),
+     docs: [main: "MyApp", # The main page in the docs
+             logo: "/home/cvasquez/Downloads/user.png",
+             extras: ["README.md"]]
+   ]
   end
 
   # Configuration for the OTP application
@@ -29,6 +33,7 @@ defmodule CodePoster.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [{:imagineer, "~> 0.3.0"},
-     {:xml_builder, "~> 0.0.9"}]
+     {:xml_builder, "~> 0.0.9"},
+     {:ex_doc, "~> 0.14", only: :dev, runtime: false}]
   end
 end
