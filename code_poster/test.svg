@@ -8,4 +8,8 @@
   <text x="20" y="20" fill="white" font-size="20" >A</text>
   <text x="35" y="20" fill="white" font-size="20" >B</text>
 
+  <text fill="#000000" x="0" y="10">#</text>
+  <text fill="#000000" x="12" y="10">C</text>
+  <text fill="#000000" x="24" y="10">=</text>
+  <text fill="#000000" x="36" y="10">=</text>
 </svg>

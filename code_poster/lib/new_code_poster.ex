@@ -4,11 +4,47 @@ defmodule NewCodePoster do
   @fontSize 20
   @ratio 0.6
 
-  def execute(code_path \\ "/home/cvasquez/rails/ng2/app/models", image_path \\ "/home/cvasquez/Downloads/user.png") do
-      code  = load_code(code_path)
-      image = load_image(image_path)
-      construct_text_elements(code, image)
-      |>
+  def execute(code_path \\ "/home/cvasquez/rails/ng2/app/models", image_path \\ "/home/cvasquez/Downloads/velocity.png") do
+      image   = load_image(image_path)
+      resized = transform_image(image_path, image)
+      code    = load_code(code_path)
+      image2  = load_image(resized)
+
+      construct_text_elements(code, image2)
+      |> build_svg(image)
+      |> save_svg("out_test.svg")
+      |> convert_to_png
+  end
+
+  def transform_image(path, %{width: width, height: height}) do
+      resized_path = Path.basename(path) |> String.replace(".", "_rezised.")
+      System.cmd("convert", ["-quality", "100", "-resize", "#{round(width * (1+(1-@ratio)))}x#{height}!", path, resized_path ])
+      resized_path
+  end
+
+  def convert_to_png(path) do
+      System.cmd("convert", [path, String.replace(path, ".svg", ".png")])
+  end
+
+  def build_svg(texts, %{width: width, height: height}) do
+      {:svg,
+       %{
+         xmlns:   "http://www.w3.org/2000/svg",
+         style:   "font-family: 'Monaco'; font-size: 20;",
+         width:   (width * @fontSize),
+         height:  (height* @fontSize),
+         "xml:space": "preserve"
+       },
+       texts}
+      |> XmlBuilder.generate
+  end
+
+  def save_svg(code, path) do
+      Logger.debug("Saving svg to #{path}")
+      {:ok, file} = File.open(path, [:write])
+      IO.binwrite(file, code)
+      File.close(file)
+      path
   end
 
   def clean_code(code) do
@@ -16,8 +52,9 @@ defmodule NewCodePoster do
 
       code
       |> String.trim
-      |> String.replace(~r/\s*\n+\s*/, " ")
-      |> String.replace(~r/\s/," ")
+      |> String.replace(" ", "")
+      |> String.replace(~r/\s*\n+\s*/, "")
+      |> String.replace(~r/\s/,"")
   end
 
   def read_folder(path) do
@@ -41,12 +78,12 @@ defmodule NewCodePoster do
   end
 
   @doc """
-  iex> NewCodePoster.to_hex {50, 150, 250}
+  iex> NewCodePoster.to_hex 50, 150, 250
   "#3296FA"
-  iex> NewCodePoster.to_hex {255, 0, 128}
+  iex> NewCodePoster.to_hex 255, 0, 128
   "#FF0080"
   """
-  def to_hex({r, g, b}) do
+  def to_hex(r, g, b) do
       "#" <>
       (r |> :binary.encode_unsigned |> Base.encode16) <>
       (g |> :binary.encode_unsigned |> Base.encode16) <>
@@ -54,26 +91,16 @@ defmodule NewCodePoster do
   end
 
   @doc """
-  iex> NewCodePoster.to_hex {50, 150, 250}
-  "#3296FA"
-  iex> NewCodePoster.to_hex {255, 0, 128}
-  "#FF0080"
-  """
-  def to_hex({r, g, b, a}) do
-      "#" <>
-      (r |> :binary.encode_unsigned |> Base.encode16) <>
-      (g |> :binary.encode_unsigned |> Base.encode16) <>
-      (b |> :binary.encode_unsigned |> Base.encode16) <>
-      (a |> :binary.encode_unsigned |> Base.encode16)
-  end
-
-  @doc """
   Mapping an rgb, a character and a position to a text tuple to be mapped to svg
   iex> NewCodePoster.pixed_mapper({255, 0, 128}, "j", 1, 1)
   {:text, %{x: 12.0, y: 20, fill: "#FF0080"}, "j"}
   """
-  def pixed_mapper(rgb, chr, x, y) do
-      { :text, %{x: (x * @ratio * @fontSize), y: (@fontSize * y), fill: to_hex(rgb)}, chr }
+  def pixed_mapper({r,g,b}, chr, x, y) do
+      { :text, %{x: round(x * @ratio * @fontSize), y: (round(@fontSize * y) + 20), style: "fill: #{to_hex(r,g,b)};"}, chr }
+  end
+
+  def pixed_mapper({r,g,b, a}, chr, x, y) do
+      { :text, %{x: round(x * @ratio * @fontSize), y: (round(@fontSize * y) + 20), style: "fill: #{to_hex(r,g,b)};", opacity: "#{Float.round(a/255, 2)}"}, chr }
   end
 
   def row_mapper([], restCode, row_mapped, _, _) do
@@ -94,7 +121,7 @@ defmodule NewCodePoster do
 
   def construct_text_elements(code, %{pixels: pixels}) do
       Logger.debug("Constructing text elements...")
-      Logger.debug(inspect(image_mapper(pixels, code, 0, [])))
+      image_mapper(pixels, code, 0, [])
   end
 
 end
