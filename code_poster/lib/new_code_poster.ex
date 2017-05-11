@@ -5,25 +5,34 @@ defmodule NewCodePoster do
   @ratio 0.6
 
   def execute(code_path \\ "/home/cvasquez/rails/ng2/app/models", image_path \\ "/home/cvasquez/Downloads/velocity.png") do
-      image   = load_image(image_path)
-      resized = transform_image(image_path, image)
-      code    = load_code(code_path)
-      image2  = load_image(resized)
-
-      construct_text_elements(code, image2)
-      |> build_svg(image)
-      |> save_svg("out_test.svg")
-      |> convert_to_png
+      with {:ok, image} <- load_image(image_path),
+           {:ok, code}  <- load_code(code_path)
+      do
+          construct_text_elements(code, image)
+          |> build_svg(image)
+          |> save_svg("out_test.svg")
+          |> convert_to_png
+          |> Logger.debug
+      else
+          err -> err
+      end
   end
 
-  def transform_image(path, %{width: width, height: height}) do
+  def load_image(image_path) do
+      Logger.debug("Loading image from '#{image_path}'...")
+      transform_image(image_path) |> Imagineer.load
+  end
+
+  def transform_image(path) do
       resized_path = Path.basename(path) |> String.replace(".", "_rezised.")
-      System.cmd("convert", ["-quality", "100", "-resize", "#{round(width * (1+(1-@ratio)))}x#{height}!", path, resized_path ])
+      System.cmd("convert", ["-quality", "100", "-resize" ,"#{ (100 + ((1-@ratio) * 100)) |> Float.round(2) |> round }%x100%!", path, resized_path ])
       resized_path
   end
 
   def convert_to_png(path) do
-      System.cmd("convert", [path, String.replace(path, ".svg", ".png")])
+      new_path =  String.replace(path, ".svg", ".png")
+      System.cmd("convert", [path, new_path])
+      new_path
   end
 
   def build_svg(texts, %{width: width, height: height}) do
@@ -69,12 +78,7 @@ defmodule NewCodePoster do
       read_folder(path)
        |> clean_code
        |> String.codepoints
-  end
-
-  def load_image(image_path) do
-      Logger.debug("Loading image from '#{image_path}'...")
-      {:ok, image} = Imagineer.load(image_path)
-      image
+       |> (fn(code) -> {:ok, code} end).()
   end
 
   @doc """
@@ -93,12 +97,17 @@ defmodule NewCodePoster do
   @doc """
   Mapping an rgb, a character and a position to a text tuple to be mapped to svg
   iex> NewCodePoster.pixed_mapper({255, 0, 128}, "j", 1, 1)
-  {:text, %{x: 12.0, y: 20, fill: "#FF0080"}, "j"}
+  {:text, %{style: "fill: #FF0080;", x: 12, y: 40}, "j"}
   """
   def pixed_mapper({r,g,b}, chr, x, y) do
       { :text, %{x: round(x * @ratio * @fontSize), y: (round(@fontSize * y) + 20), style: "fill: #{to_hex(r,g,b)};"}, chr }
   end
 
+  @doc """
+  Mapping an rgb, a character and a position to a text tuple to be mapped to svg
+  iex> NewCodePoster.pixed_mapper({255, 0, 128, 250}, "j", 1, 1)
+  {:text, %{opacity: "0.98", style: "fill: #FF0080;", x: 12, y: 40}, "j"}
+  """
   def pixed_mapper({r,g,b, a}, chr, x, y) do
       { :text, %{x: round(x * @ratio * @fontSize), y: (round(@fontSize * y) + 20), style: "fill: #{to_hex(r,g,b)};", opacity: "#{Float.round(a/255, 2)}"}, chr }
   end
