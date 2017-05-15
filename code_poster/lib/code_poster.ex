@@ -11,10 +11,10 @@ defmodule CodePoster do
            {:ok, code}  <- CodeHandler.load_code(code_path)
       do
           construct_text_elements(code, image)
-          |> ImageHandler.build_svg(image, @fontSize)
-          |> ImageHandler.save_svg("out_test.svg")
-          |> ImageHandler.convert_to_png
-          |> Logger.debug
+            |> ImageHandler.build_svg(image, @fontSize)
+            |> ImageHandler.save_svg("out_test.svg")
+            |> ImageHandler.convert_to_png
+            |> Logger.debug
       else
           err -> err
       end
