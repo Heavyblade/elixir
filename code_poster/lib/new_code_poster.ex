@@ -116,9 +116,9 @@ defmodule NewCodePoster do
       {Enum.reverse(row_mapped), restCode}
   end
 
-  def row_mapper([pixel | rest_row], [ chr | restCode ], row_mapped, x, y) do
+  def row_mapper([pixel | rest_row], [chr | restCode], row_mapped, x, y) do
       pixel = pixed_mapper(pixel, chr, x, y)
-      row_mapper(rest_row, restCode, [ pixel | row_mapped ], x+1, y)
+      row_mapper(rest_row, restCode, [pixel | row_mapped], x+1, y)
   end
 
   def image_mapper([], _, _, poster), do: poster
