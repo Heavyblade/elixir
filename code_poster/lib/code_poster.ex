@@ -6,7 +6,7 @@ defmodule CodePoster do
   @fontSize 20
   @ratio 0.6
 
-  def execute(code_path \\ "/home/cvasquez/rails/ng2/app/models", image_path \\ "/home/cvasquez/Downloads/velocity.png") do
+  def execute(code_path, image_path) do
       with {:ok, image} <- ImageHandler.load_image(image_path, @ratio),
            {:ok, code}  <- CodeHandler.load_code(code_path)
       do
