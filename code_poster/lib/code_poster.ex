@@ -10,7 +10,8 @@ defmodule CodePoster do
       with {:ok, image} <- ImageHandler.load_image(image_path, @ratio),
            {:ok, code}  <- CodeHandler.load_code(code_path)
       do
-          construct_text_elements(code, image)
+            get_needed_code(code, image)
+            |> construct_text_elements(image)
             |> ImageHandler.build_svg(image, @fontSize)
             |> ImageHandler.save_svg("out_test.svg")
             |> ImageHandler.convert_to_png
@@ -18,6 +19,11 @@ defmodule CodePoster do
       else
           err -> err
       end
+  end
+
+  def get_needed_code(code, %{width: width, height: height}) do
+      Stream.cycle(code)
+      |> Enum.take(width * height)
   end
 
   def construct_text_elements(code, %{pixels: pixels}) do
