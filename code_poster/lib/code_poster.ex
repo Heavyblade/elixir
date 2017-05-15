@@ -1,149 +1,62 @@
 defmodule CodePoster do
-    require Logger
-    alias CodePoster.PosterData
+  require Logger
+  require ImageHandler
+  require CodeHandler
 
-    @doc """
-    iex> CodePoster.to_hex {50, 150, 250}
-    "#3296FA"
-    iex> CodePoster.to_hex {255, 0, 128}
-    "#FF0080"
-    """
-    def to_hex({r, g, b}) do
-      "#" <>
-      (r |> :binary.encode_unsigned |> Base.encode16) <>
-      (g |> :binary.encode_unsigned |> Base.encode16) <>
-      (b |> :binary.encode_unsigned |> Base.encode16)
-    end
+  @fontSize 20
+  @ratio 0.6
 
-    @doc """
-    iex> CodePoster.to_hex {50, 150, 250}
-    "#3296FA"
-    iex> CodePoster.to_hex {255, 0, 128}
-    "#FF0080"
-    """
-    def to_hex({r, g, b, a}) do
-      "#" <>
-      (r |> :binary.encode_unsigned |> Base.encode16) <>
-      (g |> :binary.encode_unsigned |> Base.encode16) <>
-      (b |> :binary.encode_unsigned |> Base.encode16) <>
-      (a |> :binary.encode_unsigned |> Base.encode16)
-    end
-
-    @doc """
-    iex> CodePoster.join_code("if (true) {\\n    bang;\\n}")
-    "if (true) { bang; }"
-    iex> CodePoster.join_code("{\\n    '    ';\\n}")
-    "{ '    '; }"
-    iex> CodePoster.join_code("  a \\n bb\\n \\tc\\n    d  ")
-    "a bb c d"
-    """
-    def join_code(code) do
-        Logger.debug("Joining code...")
-        code
-        |> String.trim
-        |> String.replace(~r/\s*\n+\s*/, " ")
-        |> String.replace(~r/\s/," ")
-    end
-
-    def read_folder(path) do
-        File.ls!(path)
-        |> Enum.reject( fn x -> File.dir?(path <> "/" <> x) end)
-        |> Enum.map( fn x -> File.read!(path <> "/" <> x) end)
-        |> Enum.join
-    end
-
-    def load_code(data = %PosterData{code_path: code_path}) do
-        Logger.debug("Loading code from '#{code_path}'...")
-        code = read_folder(code_path)
-                |> join_code
-                |> String.codepoints
-        %{data | code: code}
-    end
-
-    def load_image(data = %PosterData{image_path: image_path}) do
-      Logger.debug("Loading image from '#{image_path}'...")
-      {:ok, image} = Imagineer.load(image_path)
-      %{data | image: image}
-    end
-
-    def merge_pixel_into_row(fill, character, x, y, []) do
-      [{:text, %{x: x, y: y, fill: fill}, character}]
-    end
-
-    def merge_pixel_into_row(fill, character, _, _, [{:text, element = %{fill: fill}, text} | tail]) do
-      [{:text, element, (text) <> (character) } | tail]
-    end
-
-    def merge_pixel_into_row(fill, character, x, y, pixels) do
-      [{:text, %{x: x, y: y, fill: fill}, character} | pixels]
-    end
-
-    def get_row_mapper(code, width, ratio) do
-      fn ({row, y}) ->
-        row
-        |> Enum.with_index
-        |> Enum.reduce([], fn
-          {pixel, x}, pixels -> character = Enum.at(code, y * width + x)
-                                merge_pixel_into_row(to_hex(pixel), character, x * ratio, y, pixels)
-        end)
-        |> Enum.reverse
+  def execute(code_path \\ "/home/cvasquez/rails/ng2/app/models", image_path \\ "/home/cvasquez/Downloads/velocity.png") do
+      with {:ok, image} <- ImageHandler.load_image(image_path, @ratio),
+           {:ok, code}  <- CodeHandler.load_code(code_path)
+      do
+          construct_text_elements(code, image)
+          |> ImageHandler.build_svg(image, @fontSize)
+          |> ImageHandler.save_svg("out_test.svg")
+          |> ImageHandler.convert_to_png
+          |> Logger.debug
+      else
+          err -> err
       end
-    end
+  end
 
-    def construct_text_elements(data = %PosterData{code: code,
-                                                   ratio: ratio,
-                                                   image: %{width: width, pixels: pixels}}) do
+  def construct_text_elements(code, %{pixels: pixels}) do
       Logger.debug("Constructing text elements...")
-      text_elements = pixels
-      |> Enum.with_index
-      |> Enum.map(get_row_mapper(code, width, ratio))
-      |> List.flatten
-      %{data | text_elements: text_elements}
-    end
+      image_mapper(pixels, code, 0, [])
+  end
 
-    def construct_svg(data = %PosterData{text_elements: text_elements,
-                                         ratio: ratio,
-                                         final_width: final_width,
-                                         final_height: final_height,
-                                         image: %{width: width, height: height}}) do
-      Logger.debug("Constructing svg with #{length text_elements} text elements...")
-      svg = {:svg,
-             %{
-               viewBox: "0 0 #{width*ratio} #{height}",
-               xmlns: "http://www.w3.org/2000/svg",
-               style: "font-family: 'Ubuntu'; font-size: 1; font-weight: 900;",
-               width: final_width,
-               height: final_height,
-               "xml:space": "preserve"
-             },
-             text_elements}
-      |> XmlBuilder.generate
-      %{data | svg: svg}
-    end
+  def image_mapper([], _, _, poster), do: poster
 
-    def save_svg(%PosterData{svg: svg, out_path: out_path}) do
-      Logger.debug("Saving svg to '#{out_path}'...")
-      {:ok, file} = File.open(out_path, [:write])
-      IO.binwrite(file, svg)
-      File.close(file)
-    end
+  def image_mapper([row | rest], code, line, poster) do
+      {row, rest_code} = row_mapper(row, code, [], 0, line)
+      image_mapper(rest, rest_code, line + 1 , poster ++ [row])
+  end
 
-    def go(ratio, final_width, final_height, code_path, image_path, out_path) do
-      %PosterData{
-        ratio: ratio,
-        final_width: final_width,
-        final_height: final_height,
-        code_path: code_path,
-        image_path: image_path,
-        out_path: out_path
-      }
-      |> load_code
-      |> load_image
-      |> construct_text_elements
-      |> construct_svg
-      |> save_svg
-    end
+  def row_mapper([], restCode, row_mapped, _, _) do
+      {Enum.reverse(row_mapped), restCode}
+  end
 
-    def go, do: go(0.6, 3150, 4050, "/home/cvasquez/rails/ng2/app/models", "./velocity.png", "out.svg")
+  def row_mapper([pixel | rest_row], [chr | restCode], row_mapped, x, y) do
+      pixel = pixed_mapper(pixel, chr, x, y)
+      row_mapper(rest_row, restCode, [pixel | row_mapped], x+1, y)
+  end
+
+  @doc """
+  Mapping an rgb, a character and a position to a text tuple to be mapped to svg
+  iex> CodePoster.pixed_mapper({255, 0, 128}, "j", 1, 1)
+  {:text, %{style: "fill: #FF0080;", x: 12, y: 40}, "j"}
+  """
+  def pixed_mapper({r,g,b}, chr, x, y) do
+      { :text, %{x: round(x * @ratio * @fontSize), y: (round(@fontSize * y) + 20), style: "fill: #{ImageHandler.to_hex(r,g,b)};"}, chr }
+  end
+
+  @doc """
+  Mapping an rgb, a character and a position to a text tuple to be mapped to svg
+  iex> CodePoster.pixed_mapper({255, 0, 128, 250}, "j", 1, 1)
+  {:text, %{opacity: "0.98", style: "fill: #FF0080;", x: 12, y: 40}, "j"}
+  """
+  def pixed_mapper({r,g,b, a}, chr, x, y) do
+      { :text, %{x: round(x * @ratio * @fontSize), y: (round(@fontSize * y) + 20), style: "fill: #{ImageHandler.to_hex(r,g,b)};", opacity: "#{Float.round(a/255, 2)}"}, chr }
+  end
 
 end

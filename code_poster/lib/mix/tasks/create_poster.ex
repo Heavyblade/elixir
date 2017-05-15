@@ -1,10 +1,10 @@
 defmodule Mix.Tasks.CreatePoster do
   use Mix.Task
-  require NewCodePoster
+  require CodePoster
 
   @shortdoc "Create an image using a source code"
 
   def run(args) do
-      NewCodePoster.execute(Enum.at(args, 0), Enum.at(args, 1))
+      CodePoster.execute(Enum.at(args, 0), Enum.at(args, 1))
   end
 end
