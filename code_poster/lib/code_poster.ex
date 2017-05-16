@@ -33,14 +33,21 @@ defmodule CodePoster do
   def image_mapper([], _, _, poster), do: poster
 
   def image_mapper([row | rest], code_pid, line, poster) do
-      image_mapper(rest, code_pid, line + 1 , poster ++ [row_mapper(row, code_pid, [], 0, line)])
+      image_mapper(rest, code_pid, line + 1 , poster ++ [row_mapper({line, row}, code_pid, [], 0)])
   end
 
-  def row_mapper([], _, row_mapped, _, _), do: Enum.reverse(row_mapped)
+  # def image_mapper2(pixels, code_pid, line, poster) do
+  #     pixels
+  #       |> Enum.with_index
+  #       |> Enum.map(&(Task.async(fn -> row_mapper(&1) end)))
+  #       |> Enum.map(&(Task.await(&1)))
+  # end
 
-  def row_mapper([pixel | rest_row], code_pid, row_mapped, x, y) do
+  def row_mapper({_, []}, _, row_mapped, _), do: Enum.reverse(row_mapped)
+
+  def row_mapper({y, [pixel | rest_row]}, code_pid, row_mapped, x) do
       pixel = pixed_mapper(pixel, code_pid, x, y)
-      row_mapper(rest_row, code_pid, [pixel | row_mapped], x+1, y)
+      row_mapper({y, rest_row}, code_pid, [pixel | row_mapped], x+1)
   end
 
   def get_chr(code_pid) do
