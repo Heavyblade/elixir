@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>reveal.js</title>
+
+    <link rel="stylesheet" href="css/reveal.css">
+    <link rel="stylesheet" href="css/theme/night.css">
+
+    <!-- Theme used for syntax highlighting of code -->
+    <link rel="stylesheet" href="lib/css/zenburn.css">
+
+    <!-- Printing and PDF exports -->
+    <script>
+      var link = document.createElement( 'link' );
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+      document.getElementsByTagName( 'head' )[0].appendChild( link );
+    </script>
+    <style type="text/css" media="all">
+       .logo {border: none !important; padding: 20px !important;}
+       #rails_logo   { width: 100px; }
+       #erlang_logo  { width: 100px; }
+       #elixir_logo  { width: 400px; box-shadow: none;}
+       #elixir_small { width: 100px; box-shadow: none; margin: 0px; border: none; }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section>
+          <img id="elixir_logo" src="http://elixir-lang.org/images/logo/logo.png" alt="elixir" class="logo"/>
+          <p>An Elixir Overview</p>
+        </section>
+
+        <section>
+           <h3><img id="elixir_small" src="./images/elixir_simple.png" alt="elixir"/>What is Elixir ?</h3>
+           <ul>
+             <li>Functional</li>
+             <li>Productivity</li>
+             <li>Extensibility</li>
+           </ul>
+        </section>
+        <section>
+            <h3>Origin</h3>
+            <img id="rails_logo" src="./images/Ruby_on_Rails.png" alt="" class="logo"/>
+            <p>Creator Jose Valím, Rails core team member</p>
+            <p><strong>Mission:</strong>=> Address Rails concurrency issues</p>
+        </section>
+        <section>
+          <img src="./images/erlang_logo.png" alt="" id="erlang_logo" class="logo"/>
+          <br>
+          <ul>
+            <li>Functional</li>
+            <li>Concurrent (Actor Model)</li>
+            <li>Fault tolerant</li>
+            <li>Hight availability</li>
+            <li>Distributed</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Languaje features</h2>
+        </section>
+
+        <section>
+          <h3>Pattern Maching</h3>
+          <p>the end of "=" as you knew it</p>
+          <pre>
+            <code class="elixir" data-trim contenteditable style="font-size: 18px;">
+                   x = "hola"
+                   {x, y} = {2, 3}
+                   # x -> 2
+                   # y -> 3
+                   [first | rest] = [1,2,3,4]
+                   # first -> 1
+                   # rest -> [2,3,4]
+                   [{x,y} | rest] = [{1,0}, {1,1}, {2,2},{3,5}]
+                   # x -> 1
+                   # y -> 0
+                   # rest -> [{1,1}, {2,2},{3,5}]
+            </code>
+          </pre>
+        </section>
+        <section>
+                    <section>
+                      <h2>where is used</h2>
+                      <p>function definition</p>
+                      <pre>
+                        <code class="elixir" data-trim contenteditable style="font-size: 18px;">
+
+                            def hola_mundo(mensaje) do
+                                IO.puts mensaje
+                            end
+
+                            def hola_mundo(mensaje, para) do
+                                IO.puts "#{mensaje} #{param}"
+                            end
+
+                            defmodule MyMath do
+                              def sum(list), do: _sum(list, 0)
+                              defp _sum([], total), do: total
+                              defp _sum([ head | tail ], total) do
+                                   _sum(tail, total + head)
+                              end
+                            end
+
+                        </code>
+                      </pre>
+                    </section>
+
+                    <section>
+                      <p>with statement</p>
+
+                      <pre>
+                        <code class="elixir" data-trim contenteditable style="font-size: 18px;">
+                            with {:ok, image} <- ImageHandler.load_image(image_path, @ratio),
+                                 {:ok, code}  <- CodeHandler.load_code(code_path)
+                            do
+                                  get_needed_code(code, image)
+                                  |> construct_text_elements(image)
+                                  |> ImageHandler.build_svg(image, @fontSize)
+                                  |> ImageHandler.save_svg("out_test.svg")
+                                  |> ImageHandler.convert_to_png
+                                  |> Logger.debug
+                            else
+                                err -> err
+                            end
+                        </code>
+                      </pre>
+                    </section>
+
+                    <section>
+                      <p>case statement</p>
+                      <pre>
+                        <code class="elixir" data-trim contenteditable style="font-size: 18px;">
+                            iex> case {1, 2, 3} do
+                            ...>   {4, 5, 6} ->
+                            ...>     "This clause won't match"
+                            ...>   {1, x, 3} ->
+                            ...>     "This clause will match and bind x to 2 in this clause"
+                            ...>   _ ->
+                            ...>     "This clause would match any value"
+                            ...> end
+                        </code>
+                      </pre>
+                    </section>
+         </section>
+      </div>
+    </div>
+
+    <script src="lib/js/head.min.js"></script>
+    <script src="js/reveal.js"></script>
+
+    <script>
+      // More info about config & dependencies:
+      // - https://github.com/hakimel/reveal.js#configuration
+      // - https://github.com/hakimel/reveal.js#dependencies
+      Reveal.initialize({
+        dependencies: [
+          { src: 'plugin/markdown/marked.js' },
+          { src: 'plugin/markdown/markdown.js' },
+          { src: 'plugin/notes/notes.js', async: true },
+          { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+        ]
+      });
+    </script>
+  </body>
+</html>

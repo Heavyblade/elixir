@@ -3,6 +3,7 @@ defmodule CodeHandler do
 
   def load_code(path) do
       Logger.debug("Loading code from '#{path}'...")
+
       read_folder(path)
        |> clean_code
        |> String.codepoints

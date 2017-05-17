@@ -19,6 +19,7 @@ defmodule ImageHandler do
   end
 
   def build_svg(texts, %{width: width, height: height}, fontSize) do
+      Logger.debug("Build svg document ... ")
       {:svg,
        %{
          xmlns:   "http://www.w3.org/2000/svg",

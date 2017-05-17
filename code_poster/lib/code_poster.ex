@@ -22,25 +22,26 @@ defmodule CodePoster do
   end
 
   def get_needed_code(code, %{width: width, height: height}) do
-       Agent.start_link fn -> Stream.cycle(code) |> Enum.take(width * height) end
+      Agent.start_link fn -> Stream.cycle(code) |> Enum.take(width * height) end
   end
 
   def construct_text_elements({:ok, code_pid}, %{pixels: pixels}) do
       Logger.debug("Constructing text elements...")
-      image_mapper(pixels, code_pid, 0, [])
+      image_mapper(pixels, code_pid)
   end
 
-  def image_mapper(pixels, code_pid, _line, _poster) do
+  def image_mapper(pixels, code_pid) do
       pixels
       |> Enum.with_index(1)
-      |> Enum.map(fn element -> row_mapper(element, code_pid, [], 0) end)
+      |> Enum.map(fn element -> row_mapper(element, code_pid) end)
+      # |> Enum.map(fn element -> Task.async( fn -> row_mapper(element, code_pid) end ) end)
+      # |> Enum.map(&Task.await/1)
   end
 
-  def row_mapper({[], _}, _, row_mapped, _), do: Enum.reverse(row_mapped)
-
-  def row_mapper({[pixel | rest_row], y}, code_pid, row_mapped, x) do
-      pixel = pixed_mapper(pixel, code_pid, x, y)
-      row_mapper({rest_row, y}, code_pid, [pixel | row_mapped], x+1)
+  def row_mapper({row, y}, code_pid) do
+      row
+      |> Enum.with_index
+      |> Enum.map(&( pixed_mapper(elem(&1, 0), code_pid, elem(&1, 1), y) ))
   end
 
   def get_chr(code_pid) do
@@ -48,7 +49,10 @@ defmodule CodePoster do
   end
 
   @doc """
-  Mapping an rgb, a character and a position to a text tuple to be mapped to svg
+  Creates SVG text element.
+
+  Maps an rgb tuple, a character and a position to a tuple that represents an svg text element.
+
   iex> CodePoster.pixed_mapper({255, 0, 128}, "j", 1, 1)
   {:text, %{style: "fill: #FF0080;", x: 12, y: 40}, "j"}
   """
@@ -57,7 +61,10 @@ defmodule CodePoster do
   end
 
   @doc """
-  Mapping an rgb, a character and a position to a text tuple to be mapped to svg
+  Creates SVG text element.
+
+  Maps an rgb tuple, a character and a position to a tuple that represents an svg text element with opacity.
+
   iex> CodePoster.pixed_mapper({255, 0, 128, 250}, "j", 1, 1)
   {:text, %{opacity: "0.98", style: "fill: #FF0080;", x: 12, y: 40}, "j"}
   """
