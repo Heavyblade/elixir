@@ -26,6 +26,8 @@
        #erlang_logo  { width: 200px; }
        #elixir_logo  { width: 400px; box-shadow: none;}
        #elixir_small { width: 100px; box-shadow: none; margin: 0px; border: none; }
+       #processes    { width: 200px; }
+       .image        { width: 300px; }
     </style>
   </head>
   <body>
@@ -40,18 +42,18 @@
            <h3><img id="elixir_small" src="./images/elixir_simple.png" alt="elixir"/>What is Elixir ?</h3>
            <ul>
              <li><strong>Functional</strong></li>
-             <li>Productivity</li>
-             <li>Extensibility</li>
+             <li>Productive</li>
+             <li>Extensible</li>
            </ul>
         </section>
         <section>
             <h2>What makes a language functional?</h2>
             <ul>
-                <li>First Class Functions</li>
+                <li>First class functions</li>
+                <li>High order functions</li>
                 <li>Immutability</li>
                 <li>Recursion (tail optimization)</li>
                 <li>Lazy Evaluation</li>
-                <li>Algebraic Data Types</li>
             </ul>
         </section>
         <section>
@@ -78,6 +80,7 @@
         </section>
 
         <section>
+          <h1>Show me the code !!</h1>
           <h2>Languaje features</h2>
         </section>
 
@@ -223,10 +226,102 @@
 
             <pre>
               <code class="elixir" data-trim contenteditable style="font-size: 18px;">
+                  iex> Enum.map(1..10_000_000, &(&1+1)) |> Enum.take(5)
+                  ...> [2, 3, 4, 5, 6] # 8 seconds later
+                  iex> Stream.map(1..10_000_000, &(&1+1)) |> Enum.take(5)
+                  ...> [2, 3, 4, 5, 6]
               </code>
             </pre>
 
 
+        </section>
+
+        <section>
+          <h2>Recursion</h2>
+          <p>Tail optimization + pattern matching</p>
+          <pre>
+            <code class="elixir" data-trim contenteditable style="font-size: 18px;">
+                  # Non tail optimized
+                  defmodule MyList2 do
+                    def sum([]), do: 0
+
+                    def sum([head | tail]) do
+                        head + sum(tail)
+                    end
+                  end
+
+                  # Tail optimized
+                  defmodule MyMath do
+                    def sum(list), do: _sum(list, 0)
+
+                    defp _sum([], total), do: total
+                    defp _sum([ head | tail ], total) do
+                         _sum(tail, total + head)
+                    end
+                  end
+            </code>
+          </pre>
+        </section>
+
+        <section>
+          <h2>Tooling</h2>
+          <ul>
+              <li>iex</li>
+              <li>Hex</li>
+              <li>Mix</li>
+              <li>ExUnit</li>
+              <li>docTest</li>
+          </ul>
+        </section>
+
+        <section>
+          <h1>Serious business OTP</h1>
+
+          <h2>Concurrency + Fault tolerance + </h2>
+        </section>
+
+
+        <section>
+          <h4>Everything run inside a process</h4>
+          <img src="./images/actors.png" alt="actor" class="image"/>
+        </section>
+
+        <section>
+          <h3>Creating proceses</h3>
+          <p>The Basics</p>
+          <pre>
+            <code class="elixir" data-trim contenteditable style="font-size: 18px;">
+                defmodule Test do
+                    def hello do
+                        receive do
+                           {sender, msg} -> send sender, {:ok, msg}
+                        end
+                    end
+                end
+
+                defmodule Caller do
+                    def call(msg) do
+                        pid = spawn(Test, :hello, [])
+                        send pid, {self(), msg}
+
+                        receive do
+                            {:ok, message} -> IO.puts message
+                        end
+                    end
+                end
+
+                Caller.call("Hello world")
+            </code>
+          </pre>
+        </section>
+
+        <section>
+          <h3>OTP(Open Telecom Platform)</h3>
+         <ul>
+           <li>Genservers, Agents, Tasks, Flow, etc.</li>
+           <li>Supervisors</li>
+           <li>Hotcode swapping</li>
+         </ul>
         </section>
 
       </div>
