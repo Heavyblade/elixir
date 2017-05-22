@@ -24,7 +24,7 @@
        .logo {border: none !important; padding: 20px !important;}
        #rails_logo   { width: 100px; }
        #erlang_logo  { width: 200px; }
-       #elixir_logo  { width: 600px; box-shadow: none;}
+       #elixir_logo  { width: 500px; box-shadow: none;}
        #elixir_small { width: 200px; box-shadow: none; margin: 0px; border: none; }
        #processes    { width: 200px; }
        .image        { width: 400px; }
@@ -37,20 +37,17 @@
         <section>
           <img id="elixir_logo" src="./images/elixir-vertical.png" alt="elixir" class="logo"/>
           <p>An Elixir Overview</p>
-          <br/>
           <p>Cristian Vasquez</p>
         </section>
 
         <section>
            <h3 class="title"><img id="elixir_small" src="./images/elixir_simple.png" alt="elixir"/>What is Elixir ?</h3>
-           <ul>
-             <li><strong>Functional</strong></li>
-             <li>Productive</li>
-             <li>Extensible</li>
-           </ul>
+           <blockquote cite="http://searchservervirtualization.techtarget.com/definition/Our-Favorite-Technology-Quotations">
+              &ldquo;Elixir is a dynamic, functional language designed for building scalable and maintainable applications.&rdquo;
+           </blockquote>
         </section>
         <section>
-            <h2 class="title">What makes a language functional?</h2>
+            <h3 class="title">What makes a language functional oriented?</h3>
             <ul>
                 <li>First class functions</li>
                 <li>High order functions</li>
@@ -60,7 +57,7 @@
             </ul>
         </section>
         <section>
-            <h3 class="title">Origin</h3>
+            <h3 class="title">Elixir Origin</h3>
             <img id="rails_logo" src="./images/Ruby_on_Rails.png" alt="" class="logo"/>
             <p>Creator Jose Valím, Rails core team member</p>
             <p><strong>Mission:</strong>=> To address Rails concurrency issues.</p>
@@ -79,10 +76,15 @@
         </section>
 
         <section>
+          <h2 class="title">Platform</h2>
+          <img src="./images/platform.png" alt="platform" class="logo">
+        </section>
+
+        <section>
           <h3 class="title">Who is using Erlang?</h3>
           <ul>
             <li><strong>Whatsapp</strong>=>Chat service</li>
-            <li><strong>Facebool</strong> => Chat service</li>
+            <li><strong>Facebook</strong> => Chat service</li>
             <li><strong>Amazon</strong> => SimpleDB</li>
             <li><strong>Ericsson</strong>=> Node support, GPRS and 3G mobile networks</li>
             <li><strong>Heroku</strong>=> Routing layer </li>
@@ -90,18 +92,18 @@
         </section>
 
         <section>
-          <h2 class="title">Platform</h2>
-          <img src="./images/platform.png" alt="platform" class="logo">
+          <h3 class="title">Who is using Elixir?</h3>
+          <a href="https://github.com/doomspork/elixir-companies">https://github.com/doomspork/elixir-companies</a>
         </section>
 
         <section>
           <h1>Show me the code !!</h1>
-          <h2>Languaje features</h2>
+          <h2>Language features</h2>
         </section>
 
         <section>
             <h3 class="title">Structure</h3>
-            <p>Code is structured in functions and modules, and extended with macros and behaviours</p>
+            <p>Code is structured in functions, modules and extended with macros and behaviours</p>
             <pre>
               <code class="elixir" data-trim contenteditable style="font-size: 18px;">
                   defmodule Hello do
@@ -123,7 +125,7 @@
                       <p>the end of "=" as you knew it</p>
                       <pre>
                         <code class="elixir" data-trim contenteditable style="font-size: 18px;">
-                               x = "hola"
+                               x = "hello"
                                {x, y} = {2, 3}
                                # x -> 2
                                # y -> 3
@@ -143,22 +145,19 @@
                       <pre>
                         <code class="elixir" data-trim contenteditable style="font-size: 18px;">
 
-                            def hello_world(messaje) do
-                                IO.puts mensaje
+                            def hello_world(message) do
+                                IO.puts mensarge
                             end
 
-                            def hello_world(messaje, param) do
-                                IO.puts "#{mensaje} #{param}"
+                            def hello_world(message, name) do
+                                IO.puts "#{mensage} #{name}"
                             end
 
-                            defmodule MyMath do
-                              def sum(list), do: _sum(list, 0)
+                            iex> hello_world("hello")
+                            ...> "hello"
+                            iex> hello_workd("hello", "world")
+                            ...> "hello world"
 
-                              defp _sum([], total), do: total
-                              defp _sum([ head | tail ], total) do
-                                   _sum(tail, total + head)
-                              end
-                            end
 
                         </code>
                       </pre>
@@ -211,7 +210,7 @@
                       <li>Atoms</li>
                       <li>Regex</li>
                       <li>Ranges</li>
-                      <li>PIDS and Ports</li>
+                      <li>Pids and Ports</li>
                       <li>Binaries</li>
                       <li>Date and Times</li>
                   </ul>
@@ -219,11 +218,11 @@
               <section>
                   <h3>Collection Types</h3>
                   <ul>
-                    <li><strong>Struct</strong> => defmodule User, do: defstruct name: "John", age: 27</li>
                     <li><strong>Tuples</strong> => {1, "a", true, :var}</li>
-                    <li><strong>Lists</strong> => [1, "a", true, :var]</li>
+                    <li><strong>Lists</strong> => [1, "a", true, :var] =~ [ 1 | [ "a" | [  true | [:var | []]]]]   </li>
                     <li><strong>Keyword List</strong> => [name: "john", age: 22, single: true]</li>
                     <li><strong>Maps</strong> => %{:name => "john", :age => 22, :single => true}</li>
+                    <li><strong>Struct</strong> => defmodule User, do: defstruct name: "John", age: 27</li>
                   </ul>
               </section>
         </section>
@@ -302,7 +301,7 @@
         <section>
           <h2 class="title">Tooling</h2>
           <ul>
-              <li>iex</li>
+              <li>IEx</li>
               <li>Hex</li>
               <li>Mix</li>
               <li>ExUnit</li>
@@ -359,17 +358,18 @@
          <ul>
            <li>Genservers, Agents, Tasks, Flow, etc.</li>
            <li>Supervisors</li>
-           <li>Hotcode swapping</li>
+           <li>Hot code swapping</li>
          </ul>
         </section>
 
         <section>
             <h3 class="title">Pending more advance stuff</h3>
             <ul>
-              <li>Hotcode swapping</li>
+              <li>Hot code swapping</li>
               <li>Macros</li>
               <li>Protocols</li>
-              <li>Deployment exrm / desilery </li>
+              <li>Deployment exrm / destilery </li>
+              <li>Distributed Elixir</li>
             </ul>
         </section>
 
