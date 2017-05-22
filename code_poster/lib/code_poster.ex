@@ -53,8 +53,9 @@ defmodule CodePoster do
 
   Maps an rgb tuple, a character and a position to a tuple that represents an svg text element.
 
-  iex> CodePoster.pixed_mapper({255, 0, 128}, "j", 1, 1)
-  {:text, %{style: "fill: #FF0080;", x: 12, y: 40}, "j"}
+  iex> {:ok, pid} = Agent.start_link fn -> ["h","e", "l", "l", "o"] end
+  iex> CodePoster.pixed_mapper({255, 0, 128}, pid, 1, 1)
+  {:text, %{style: "fill: #FF0080;", x: 12, y: 40}, "h"}
   """
   def pixed_mapper({r,g,b}, code_pid, x, y) do
       { :text, %{x: round(x * @ratio * @fontSize), y: (round(@fontSize * y) + 20), style: "fill: #{ImageHandler.to_hex(r,g,b)};"}, get_chr(code_pid) }
@@ -65,8 +66,9 @@ defmodule CodePoster do
 
   Maps an rgb tuple, a character and a position to a tuple that represents an svg text element with opacity.
 
-  iex> CodePoster.pixed_mapper({255, 0, 128, 250}, "j", 1, 1)
-  {:text, %{opacity: "0.98", style: "fill: #FF0080;", x: 12, y: 40}, "j"}
+  iex> {:ok, pid} = Agent.start_link fn -> ["h","e", "l", "l", "o"] end
+  iex> CodePoster.pixed_mapper({255, 0, 128, 250}, pid, 1, 1)
+  {:text, %{opacity: "0.98", style: "fill: #FF0080;", x: 12, y: 40}, "h"}
   """
   def pixed_mapper({r,g,b, a}, code_pid, x, y) do
       { :text, %{x: round(x * @ratio * @fontSize), y: (round(@fontSize * y) + 20), style: "fill: #{ImageHandler.to_hex(r,g,b)};", opacity: "#{Float.round(a/255, 2)}"}, get_chr(code_pid) }
