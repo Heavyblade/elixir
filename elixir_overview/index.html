@@ -24,22 +24,25 @@
        .logo {border: none !important; padding: 20px !important;}
        #rails_logo   { width: 100px; }
        #erlang_logo  { width: 200px; }
-       #elixir_logo  { width: 400px; box-shadow: none;}
-       #elixir_small { width: 100px; box-shadow: none; margin: 0px; border: none; }
+       #elixir_logo  { width: 600px; box-shadow: none;}
+       #elixir_small { width: 200px; box-shadow: none; margin: 0px; border: none; }
        #processes    { width: 200px; }
-       .image        { width: 300px; }
+       .image        { width: 400px; }
+       .title        { color: #4e2a8e !important; }
     </style>
   </head>
   <body>
     <div class="reveal">
       <div class="slides">
         <section>
-          <img id="elixir_logo" src="http://elixir-lang.org/images/logo/logo.png" alt="elixir" class="logo"/>
+          <img id="elixir_logo" src="./images/elixir-vertical.png" alt="elixir" class="logo"/>
           <p>An Elixir Overview</p>
+          <br/>
+          <p>Cristian Vasquez</p>
         </section>
 
         <section>
-           <h3><img id="elixir_small" src="./images/elixir_simple.png" alt="elixir"/>What is Elixir ?</h3>
+           <h3 class="title"><img id="elixir_small" src="./images/elixir_simple.png" alt="elixir"/>What is Elixir ?</h3>
            <ul>
              <li><strong>Functional</strong></li>
              <li>Productive</li>
@@ -47,7 +50,7 @@
            </ul>
         </section>
         <section>
-            <h2>What makes a language functional?</h2>
+            <h2 class="title">What makes a language functional?</h2>
             <ul>
                 <li>First class functions</li>
                 <li>High order functions</li>
@@ -57,12 +60,13 @@
             </ul>
         </section>
         <section>
-            <h3>Origin</h3>
+            <h3 class="title">Origin</h3>
             <img id="rails_logo" src="./images/Ruby_on_Rails.png" alt="" class="logo"/>
             <p>Creator Jose Valím, Rails core team member</p>
-            <p><strong>Mission:</strong>=> Address Rails concurrency issues</p>
+            <p><strong>Mission:</strong>=> To address Rails concurrency issues.</p>
         </section>
         <section>
+          <h4 class="title">Enter Erlang</h4>
           <img src="./images/erlang_logo.png" alt="" id="erlang_logo" class="logo"/>
           <br>
           <ul>
@@ -72,16 +76,22 @@
             <li>Hight availability</li>
             <li>Distributed</li>
           </ul>
-
         </section>
+
         <section>
-          <h2>Platform</h2>
+          <h3 class="title">Who is using Erlang?</h3>
+          <ul>
+            <li><strong>Whatsapp</strong>=>Chat service</li>
+            <li><strong>Facebool</strong> => Chat service</li>
+            <li><strong>Amazon</strong> => SimpleDB</li>
+            <li><strong>Ericsson</strong>=> Node support, GPRS and 3G mobile networks</li>
+            <li><strong>Heroku</strong>=> Routing layer </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="title">Platform</h2>
           <img src="./images/platform.png" alt="platform" class="logo">
-        </section>
-        <section>
-            <h2>Learning Curve</h2>
-            <p>No as easy as Ruby not as scary as Haskell</p>
-
         </section>
 
         <section>
@@ -90,8 +100,26 @@
         </section>
 
         <section>
+            <h3 class="title">Structure</h3>
+            <p>Code is structured in functions and modules, and extended with macros and behaviours</p>
+            <pre>
+              <code class="elixir" data-trim contenteditable style="font-size: 18px;">
+                  defmodule Hello do
+                      def world(message) do
+                          print_message(message)
+                      end
+
+                      defp print_message(message \\ "hello") do
+                           IO.puts "Hello #{message}"
+                      end
+                  end
+              </code>
+            </pre>
+        </section>
+
+        <section>
                     <section>
-                      <h3>Pattern Maching</h3>
+                      <h3 class="title">Pattern Maching</h3>
                       <p>the end of "=" as you knew it</p>
                       <pre>
                         <code class="elixir" data-trim contenteditable style="font-size: 18px;">
@@ -99,7 +127,7 @@
                                {x, y} = {2, 3}
                                # x -> 2
                                # y -> 3
-                               [first | rest] = [1,2,3,4]
+                               [head | tail] = [1,2,3,4]
                                # first -> 1
                                # rest -> [2,3,4]
                                [{x,y} | rest] = [{1,0}, {1,1}, {2,2},{3,5}]
@@ -110,16 +138,16 @@
                       </pre>
                     </section>
                     <section>
-                      <h2>where is used</h2>
+                      <h2 class="title">where is used</h2>
                       <p>function definition</p>
                       <pre>
                         <code class="elixir" data-trim contenteditable style="font-size: 18px;">
 
-                            def hola_mundo(mensaje) do
+                            def hello_world(messaje) do
                                 IO.puts mensaje
                             end
 
-                            def hola_mundo(mensaje, param) do
+                            def hello_world(messaje, param) do
                                 IO.puts "#{mensaje} #{param}"
                             end
 
@@ -137,7 +165,7 @@
                     </section>
 
                     <section>
-                      <p>with statement</p>
+                      <p class="title">with statement</p>
 
                       <pre>
                         <code class="elixir" data-trim contenteditable style="font-size: 18px;">
@@ -158,7 +186,7 @@
                     </section>
 
                     <section>
-                      <p>case statement</p>
+                      <p class="title">case statement</p>
                       <pre>
                         <code class="elixir" data-trim contenteditable style="font-size: 18px;">
                             iex> case {1, 2, 3} do
@@ -174,30 +202,34 @@
                     </section>
          </section>
         <section>
-          <h2>Data Types</h2>
-          <p>Basic</p>
-          <ul>
-            <li>Integer</li>
-            <li>Float</li>
-            <li>Atoms</li>
-            <li>Regex</li>
-            <li>Ranges</li>
-            <li>PIDS and Ports</li>
-            <li>Binaries</li>
-            <li>Date and Times</li>
-            <li>Struct</li>
-          </ul>
-          <p>Collection Types</p>
-          <ul>
-            <li>Tuples => {1, "a", true, :var}</li>
-            <li>Lists => [1, "a", true, :var]</li>
-            <li>Keyword List => [name: "john", age: 22, single: true]</li>
-            <li>Maps => %{:name => "john", :age => 22, :single => true}</li>
-          </ul>
+              <section>
+                  <h3>Data Types</h3>
+                  <p>Basic</p>
+                  <ul>
+                      <li>Integer</li>
+                      <li>Float</li>
+                      <li>Atoms</li>
+                      <li>Regex</li>
+                      <li>Ranges</li>
+                      <li>PIDS and Ports</li>
+                      <li>Binaries</li>
+                      <li>Date and Times</li>
+                  </ul>
+              </section>
+              <section>
+                  <h3>Collection Types</h3>
+                  <ul>
+                    <li><strong>Struct</strong> => defmodule User, do: defstruct name: "John", age: 27</li>
+                    <li><strong>Tuples</strong> => {1, "a", true, :var}</li>
+                    <li><strong>Lists</strong> => [1, "a", true, :var]</li>
+                    <li><strong>Keyword List</strong> => [name: "john", age: 22, single: true]</li>
+                    <li><strong>Maps</strong> => %{:name => "john", :age => 22, :single => true}</li>
+                  </ul>
+              </section>
         </section>
 
         <section>
-          <h2>Inmutability</h2>
+          <h2 class="title">Inmutability</h2>
           <pre>
             <code class="elixir" data-trim contenteditable style="font-size: 18px;">
                    iex> x = [1,2,3,4]
@@ -213,36 +245,34 @@
         </section>
 
         <section>
-            <h2>Pipe operator |> </h2>
+            <h2 class="title">Pipe operator |> </h2>
+            <p>Like unix pipes</p>
             <pre>
               <code class="elixir" data-trim contenteditable style="font-size: 18px;">
                     "hello world"
-                    |> String.upcase
-                    |> String.split("")
-                    |> Enum.take(2)
-                    |> IO.puts
-
+                      |> String.upcase
+                      |> String.split("")
+                      |> Enum.take(2)
+                      |> IO.puts
+                    ..> HE
               </code>
             </pre>
         </section>
 
         <section>
-          <h2>Lazy evaluation - Streams</h2>
-
-            <pre>
+          <h2 class="title">Streams</h2>
+          <pre>
               <code class="elixir" data-trim contenteditable style="font-size: 18px;">
                   iex> Enum.map(1..10_000_000, &(&1+1)) |> Enum.take(5)
                   ...> [2, 3, 4, 5, 6] # 8 seconds later
                   iex> Stream.map(1..10_000_000, &(&1+1)) |> Enum.take(5)
-                  ...> [2, 3, 4, 5, 6]
+                  ...> [2, 3, 4, 5, 6] # immediately
               </code>
-            </pre>
-
-
+          </pre>
         </section>
 
         <section>
-          <h2>Recursion</h2>
+          <h2 class="title">Recursion</h2>
           <p>Tail optimization + pattern matching</p>
           <pre>
             <code class="elixir" data-trim contenteditable style="font-size: 18px;">
@@ -269,7 +299,7 @@
         </section>
 
         <section>
-          <h2>Tooling</h2>
+          <h2 class="title">Tooling</h2>
           <ul>
               <li>iex</li>
               <li>Hex</li>
@@ -280,30 +310,22 @@
         </section>
 
         <section>
-          <h1>Serious business OTP</h1>
+          <h2 class="title">Serious business <br/> OTP</h2>
 
-          <h2>Concurrency + Fault tolerance + </h2>
+          <h3>Scalability + Fault tolerance</h3>
         </section>
 
 
         <section>
-          <h4>Everything run inside a process</h4>
+          <h3 class="title">Everything run inside a process</h3>
           <img src="./images/actors.png" alt="actor" class="image"/>
         </section>
 
         <section>
-          <h3>Creating proceses</h3>
+          <h3 class="title" >Creating proceses</h3>
           <p>The Basics</p>
           <pre>
             <code class="elixir" data-trim contenteditable style="font-size: 18px;">
-                defmodule Test do
-                    def hello do
-                        receive do
-                           {sender, msg} -> send sender, {:ok, msg}
-                        end
-                    end
-                end
-
                 defmodule Caller do
                     def call(msg) do
                         pid = spawn(Test, :hello, [])
@@ -315,18 +337,39 @@
                     end
                 end
 
+                defmodule Test do
+                    def hello do
+                        receive do
+                           {sender, msg} -> send sender, {:ok, msg}
+                        end
+                    end
+                end
+
+
+
                 Caller.call("Hello world")
             </code>
           </pre>
         </section>
 
         <section>
-          <h3>OTP(Open Telecom Platform)</h3>
+         <h3 class="title">OTP<br/>(Open Telecom Platform)</h3>
+         <br/>
          <ul>
            <li>Genservers, Agents, Tasks, Flow, etc.</li>
            <li>Supervisors</li>
            <li>Hotcode swapping</li>
          </ul>
+        </section>
+
+        <section>
+            <h3 class="title">Pending more advance stuff</h3>
+            <ul>
+              <li>Hotcode swapping</li>
+              <li>Macros</li>
+              <li>Protocols</li>
+              <li>Deployment exrm / desilery </li>
+            </ul>
         </section>
 
       </div>
