@@ -11,7 +11,7 @@ defmodule CodePoster do
            {:ok, code}  <- CodeHandler.load_code(code_path)
       do
             get_needed_code(code, image)
-            |> construct_text_elements(image)
+            |> image_mapper(image)
             |> ImageHandler.build_svg(image, @fontSize)
             |> ImageHandler.save_svg("out_test.svg")
             |> ImageHandler.convert_to_png
@@ -25,17 +25,13 @@ defmodule CodePoster do
       Agent.start_link fn -> Stream.cycle(code) |> Enum.take(width * height) end
   end
 
-  def construct_text_elements({:ok, code_pid}, %{pixels: pixels}) do
+  def image_mapper({:ok, code_pid}, %{pixels: pixels}) do
       Logger.debug("Constructing text elements...")
-      image_mapper(pixels, code_pid)
-  end
-
-  def image_mapper(pixels, code_pid) do
       pixels
       |> Enum.with_index(1)
-      |> Enum.map(fn element -> row_mapper(element, code_pid) end)
-      # |> Enum.map(fn element -> Task.async( fn -> row_mapper(element, code_pid) end ) end)
-      # |> Enum.map(&Task.await/1)
+      # |> Enum.map(fn element -> row_mapper(element, code_pid) end)
+      |> Enum.map(fn element -> Task.async( fn -> row_mapper(element, code_pid) end ) end)
+      |> Enum.map(&Task.await/1)
   end
 
   def row_mapper({row, y}, code_pid) do
