@@ -38,5 +38,7 @@ defmodule React.Endpoint do
     key: "_react_key",
     signing_salt: "XJdd5R6d"
 
+  plug CORSPlug
+
   plug React.Router
 end

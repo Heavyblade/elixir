@@ -11,6 +11,12 @@ defmodule React.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+
+    get "/customers", CustomersController,     :index
+    get "/customers/:id", CustomersController, :show
+
+    options "/customers", CustomersController, :options
+    options "/customers/:id", CustomersController, :options
   end
 
   scope "/", React do
