@@ -10,7 +10,7 @@ use Mix.Config
 
 # You can configure your application as:
 #
-#     config :issues, key: :value
+config :issues, github_url: "https://api.github.com/repos"
 #
 # and access this configuration in your application as:
 #
