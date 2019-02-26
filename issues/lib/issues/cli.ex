@@ -8,7 +8,7 @@ defmodule Issues.CLI do
   the various functions that up generating a
   table of the last _n_isssues in a github project
   """
-  def run(argv) do
+  def main(argv) do
     argv
     |> parse_args
     |> process
