@@ -19,6 +19,7 @@ defmodule Sequence.StashServer do
   def init(init_arg) do
     {:ok, init_arg}
   end
+
   def start_link(initial_state) do
       GenServer.start_link(__MODULE__, initial_state, name: __MODULE__)
   end
