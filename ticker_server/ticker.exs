@@ -1,4 +1,4 @@
-defmodule Ticket do
+defmodule Ticker do
   @interval 2000 # every 2 seconds
   @name :ticker
 
